@@ -263,6 +263,7 @@ func publickeyHandler(w http.ResponseWriter, r *http.Request, c *Config) (int, e
 	if err := pem.Encode(w, block); err != nil {
 		return http.StatusInternalServerError, err
 	}
+	w.Header().Set("Content-Type", "application/pkix-cert")
 	return http.StatusOK, nil
 }
 
