@@ -226,6 +226,19 @@ func loginHandler(w http.ResponseWriter, r *http.Request, c *Config) (int, error
 	return http.StatusMethodNotAllowed, nil
 }
 
+func loginformHandler(w http.ResponseWriter, r *http.Request, c *Config) (int, error) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte(`
+<html><body>
+<form action="` + path.Join(c.Basepath, "/login") + `" method=POST>
+<input type=hidden name=url value="` + r.URL.String() + `"/>
+<input type=text name=handle />
+<input type=submit>
+</form></body></html>
+`))
+	return http.StatusOK, nil
+}
+
 func signoutHandler(w http.ResponseWriter, r *http.Request, c *Config) (int, error) {
 	if cookie, err := r.Cookie("jwt_token"); err == nil {
 		cookie.Expires = time.Now().AddDate(-1, 0, 0)
@@ -303,7 +316,8 @@ func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 		return signoutHandler(w, r, c)
 	default:
 		if code, err := tokenHandler(w, r, c); err != nil {
-			return code, err
+			w.WriteHeader(code)
+			return loginformHandler(w, r, c)
 		}
 	}
 	return a.Next.ServeHTTP(w, r)
@@ -326,18 +340,6 @@ func validateToken(token string, key rsa.PublicKey) (*Claims, error) {
 		return nil, errors.New("Token expired")
 	}
 	return claims, nil
-}
-
-func loginformHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(`
-<html><body>
-<form action="/multipass/login" method=POST>
-<input type=hidden name=url value="` + r.URL.String() + `"/>
-<input type=text name=handle />
-<input type=submit>
-</form></body></html>
-`))
 }
 
 type Authorizer interface {
