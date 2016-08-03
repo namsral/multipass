@@ -1,167 +1,81 @@
 package multipass
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"net/http"
 	"net/smtp"
 	"net/url"
+	"path"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/mholt/caddy"
 	"github.com/mholt/caddy/caddyhttp/httpserver"
 
 	jose "gopkg.in/square/go-jose.v1"
 )
 
-const directive = "passless"
-
-// Add directive to caddy source code
-// source: github.com/mholt/caddy/caddyhttp/httpserver/plugin.go
-func init() {
-	caddy.RegisterPlugin(directive, caddy.Plugin{
-		ServerType: "http",
-		Action:     setup,
-	})
+type Auth struct {
+	Configs  []*Config
+	SiteAddr string
+	Next     httpserver.Handler
 }
 
-func setup(c *caddy.Controller) error {
-	parse(c)
-	c.OnStartup(func() error {
-		fmt.Println(directive + " is intialized")
-		return nil
-	})
-
-	h, err := NewConfig()
-	if err != nil {
-		return err
-	}
-	//h.sender = &logSender{template: "test"}
-	h.sender = NewMailSender("hello@example.com", "localhost:2525", nil)
-	h.authorizer = NewEmailAuthorizer()
-	for _, e := range []string{"lisa@example.com", "bart@example.com"} {
-		if err := h.authorizer.Add(e); err != nil {
-			return err
-		}
-	}
-	cfg := httpserver.GetConfig(c)
-	mid := func(next httpserver.Handler) httpserver.Handler {
-		h.Next = next
-		return h
-	}
-	cfg.AddMiddleware(mid)
-
-	return nil
-}
-
-func parse(c *caddy.Controller) {
-	for c.Next() {
-		args := c.RemainingArgs()
-		for c.NextBlock() {
-			fmt.Println("passless dir value", c.Val(), args)
-		}
-	}
-}
-
-type Authorizer interface {
-	IsAuthorized(handle string) bool
-	Add(handle string) error
-}
-
-func NewEmailAuthorizer() *EmailAuthorizer {
-	auth := &EmailAuthorizer{}
-	auth.list = []string{}
-
-	return auth
-}
-
-type EmailAuthorizer struct {
-	lock sync.Mutex
-	list []string
-}
-
-func (a *EmailAuthorizer) Add(handle string) error {
-	a.lock.Lock()
-	a.list = append(a.list, handle)
-	a.lock.Unlock()
-	return nil
-}
-
-func (a *EmailAuthorizer) IsAuthorized(handle string) bool {
-	a.lock.Lock()
-	for _, e := range a.list {
-		if e == handle {
-			a.lock.Unlock()
-			return true
-		}
-	}
-	a.lock.Unlock()
-	return false
-}
-
-type Sender interface {
-	Send(handle, loginURL string) error
-}
-
-type MailSender struct {
-	auth     smtp.Auth
-	addr     string
-	from     string
-	template string
-}
-
-func NewMailSender(from, addr string, auth smtp.Auth) *MailSender {
-	return &MailSender{
-		auth: auth,
-		from: from,
-		addr: addr,
-	}
-}
-
-func (s MailSender) Send(handle, loginStr string) error {
-	var body string
-	switch len(s.template) > 0 {
-	case true:
-		body = fmt.Sprintf(s.template, handle, loginStr)
-	default:
-		body = fmt.Sprintf("handle: %s\nurl: %s", handle, loginStr)
-	}
-	dateH := "Date: " + time.Now().Format(time.RFC1123Z)
-	subjectH := "Subject: your login link"
-	fromH := "From: " + s.from
-	toH := "To: " + handle
-	msg := strings.Join([]string{dateH, subjectH, fromH, toH, "", body}, "\n")
-
-	return smtp.SendMail(s.addr, s.auth, s.from, []string{handle}, []byte(msg))
-}
-
-type logSender struct {
-	template string
-}
-
-func (s logSender) Send(handle, loginStr string) error {
-	log.Println("handle:", handle, "login:", loginStr)
-	return nil
+type Rule struct {
+	Path      string
+	Basepath  string
+	Expires   time.Duration
+	Handles   []string
+	Transport string
 }
 
 type Config struct {
+	PathScope string
+	Basepath  string
+	Expires   time.Duration
+
 	sender     Sender
 	authorizer Authorizer
 	signer     jose.Signer
-	privateKey *rsa.PrivateKey
+	key        *rsa.PrivateKey
+}
 
-	loginPath   string
-	signoutPath string
+func ConfigFromRule(r Rule) (*Config, error) {
+	config, err := NewConfig()
+	if err != nil {
+		return nil, err
+	}
+	if len(r.Path) > 0 {
+		config.PathScope = r.Path
+	}
+	if len(r.Basepath) > 0 {
+		config.Basepath = r.Basepath
+	}
+	if r.Expires > 0 {
+		config.Expires = r.Expires
+	}
 
-	Next httpserver.Handler
+	addr := "localhost:2525"
+	from := "no-reply@example.com"
+	msgTmpl := emailTemplate
+	config.sender = NewMailSender(addr, nil, from, msgTmpl)
+
+	authorizer := &EmailAuthorizer{list: []string{}}
+	for _, handle := range r.Handles {
+		authorizer.Add(handle)
+	}
+	config.authorizer = authorizer
+
+	return config, nil
 }
 
 func NewConfig() (*Config, error) {
@@ -174,10 +88,11 @@ func NewConfig() (*Config, error) {
 		return nil, err
 	}
 	return &Config{
-		privateKey:  pk,
-		signer:      signer,
-		loginPath:   "/passless/login",
-		signoutPath: "/passless/signout",
+		PathScope: "/",
+		Basepath:  "/",
+		Expires:   time.Hour * 24,
+		key:       pk,
+		signer:    signer,
 	}, nil
 }
 
@@ -219,14 +134,17 @@ func verify(token string, pk rsa.PublicKey) ([]byte, error) {
 	return data, nil
 }
 
-type loginClaims struct {
+type claims struct {
 	Handle  string `json:"handle"`
+	Path    string `json:"path"`
 	Expires int64  `json:"exp"`
 }
 
-func (c *Config) newLoginLink(handle string, exp time.Time, urlStr string) (string, error) {
-	claims := &loginClaims{
+func (c *Config) AccessToken(handle string) (tokenStr string, err error) {
+	exp := time.Now().Add(c.Expires)
+	claims := &claims{
 		Handle:  handle,
+		Path:    c.PathScope,
 		Expires: exp.Unix(),
 	}
 	payload, err := json.Marshal(claims)
@@ -238,21 +156,16 @@ func (c *Config) newLoginLink(handle string, exp time.Time, urlStr string) (stri
 		return "", err
 	}
 
-	v := url.Values{}
+	return jws.CompactSerialize()
+}
 
-	tokenStr, err := jws.CompactSerialize()
-	if err != nil {
-		return "", err
-	}
+func (c *Config) LoginURL(u url.URL, tokenStr string) url.URL {
+	u.Path = path.Join(c.Basepath, "login")
+	v := url.Values{}
 	v.Set("token", tokenStr)
-	u, err := url.Parse(urlStr)
-	if err != nil {
-		return "", err
-	}
-	u.Path = c.loginPath
 	u.RawQuery = v.Encode()
 
-	return u.String(), nil
+	return u
 }
 
 func publicKeyWriter(w io.Writer, pk *rsa.PublicKey) error {
@@ -270,29 +183,44 @@ func publicKeyWriter(w io.Writer, pk *rsa.PublicKey) error {
 	return nil
 }
 
-func (c *Config) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
+func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
+	var c *Config
+	for i := range a.Configs {
+		if httpserver.Path(r.URL.Path).Matches(a.Configs[i].PathScope) {
+			c = a.Configs[i]
+		}
+	}
+	if c == nil {
+		return a.Next.ServeHTTP(w, r)
+	}
+
 	switch r.URL.Path {
-	case "/passless/pub.cer":
-		if err := publicKeyWriter(w, &c.privateKey.PublicKey); err != nil {
+	case path.Join(c.Basepath, "pub.cer"):
+		if err := publicKeyWriter(w, &c.key.PublicKey); err != nil {
 			return http.StatusInternalServerError, err
 		}
 		return http.StatusOK, nil
-	case c.loginPath:
+	case path.Join(c.Basepath, "login"):
 		if r.Method == "POST" {
 			r.ParseForm()
 			handle := r.PostForm.Get("handle")
 			if len(handle) == 0 {
-				http.Redirect(w, r, c.loginPath, http.StatusSeeOther)
+				loc := path.Join(c.Basepath, "login")
+				http.Redirect(w, r, loc, http.StatusSeeOther)
 				return http.StatusSeeOther, nil
 			}
 			switch c.authorizer.IsAuthorized(handle) {
 			case true:
-				exp := time.Now().Add(time.Hour * 12)
-				urlStr, err := c.newLoginLink(handle, exp, r.URL.String())
+				token, err := c.AccessToken(handle)
 				if err != nil {
 					log.Print(err)
 				}
-				if err := c.sender.Send(handle, urlStr); err != nil {
+				siteURL, err := url.Parse(a.SiteAddr)
+				if err != nil {
+					log.Fatal(err)
+				}
+				loginURL := c.LoginURL(*siteURL, token)
+				if err := c.sender.Send(handle, loginURL.String()); err != nil {
 					log.Print(err)
 				}
 			}
@@ -313,32 +241,36 @@ func (c *Config) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) 
 				http.Redirect(w, r, r.URL.String(), http.StatusSeeOther)
 				return http.StatusSeeOther, nil
 			}
+			w.Header().Add("Content-Type", "text/html; charset=utf-8")
 			w.Write([]byte("<html><body><form action=" + r.URL.Path + " method=POST><input type=text name=handle /><input type=submit></form></body></html>"))
-			return http.StatusCreated, nil
+			return http.StatusOK, nil
 		}
 		return http.StatusMethodNotAllowed, nil
-	case c.signoutPath:
+	case path.Join(c.Basepath, "signout"):
 		if cookie, err := r.Cookie("jwt_token"); err == nil {
 			cookie.Expires = time.Now().AddDate(-1, 0, 0)
 			cookie.MaxAge = -1
 			cookie.Path = "/"
 			http.SetCookie(w, cookie)
 		}
-		http.Redirect(w, r, c.loginPath, http.StatusSeeOther)
+		loc := path.Join(c.Basepath, "login")
+		http.Redirect(w, r, loc, http.StatusSeeOther)
 		return http.StatusSeeOther, nil
 	}
 	// Extract token from HTTP header, query parameter or cookie
 	tokenStr, err := extractToken(r)
 	if err != nil {
-		return http.StatusUnauthorized, err
+		w.WriteHeader(http.StatusUnauthorized)
+		loginformHandler(w, r)
+		return http.StatusOK, nil
 	}
 	// Verify token signature
-	payload, err := verify(tokenStr, c.privateKey.PublicKey)
+	payload, err := verify(tokenStr, c.key.PublicKey)
 	if err != nil {
 		return http.StatusUnauthorized, err
 	}
 	// Unmarshal token claims
-	claims := &loginClaims{}
+	claims := &claims{}
 	if err := json.Unmarshal(payload, claims); err != nil {
 		return http.StatusUnauthorized, err
 	}
@@ -346,9 +278,105 @@ func (c *Config) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) 
 	if time.Unix(claims.Expires, 0).Before(time.Now()) {
 		return http.StatusForbidden, nil
 	}
+	// Verify path claim
+	if claims.Path != c.PathScope {
+		return http.StatusForbidden, nil
+	}
 	// Authorize handle claim
 	if ok := c.authorizer.IsAuthorized(claims.Handle); !ok {
 		return http.StatusForbidden, nil
 	}
-	return c.Next.ServeHTTP(w, r)
+	return a.Next.ServeHTTP(w, r)
+}
+
+func loginformHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte(`
+<html><body>
+<form action="/multipass/login" method=POST>
+<input type=hidden name=url value="` + r.URL.String() + `"/>
+<input type=text name=handle />
+<input type=submit>
+</form></body></html>
+`))
+}
+
+type Authorizer interface {
+	IsAuthorized(handle string) bool
+	Add(handle string) error
+}
+
+type EmailAuthorizer struct {
+	lock sync.Mutex
+	list []string
+}
+
+func (a *EmailAuthorizer) Add(handle string) error {
+	a.lock.Lock()
+	a.list = append(a.list, handle)
+	a.lock.Unlock()
+	return nil
+}
+
+func (a *EmailAuthorizer) IsAuthorized(handle string) bool {
+	a.lock.Lock()
+	for _, e := range a.list {
+		if e == handle {
+			a.lock.Unlock()
+			return true
+		}
+	}
+	a.lock.Unlock()
+	return false
+}
+
+type Sender interface {
+	Send(handle, loginURL string) error
+}
+
+type MailSender struct {
+	auth     smtp.Auth
+	addr     string
+	from     string
+	template *template.Template
+}
+
+func NewMailSender(addr string, auth smtp.Auth, from, msgTmpl string) *MailSender {
+	t := template.Must(template.New("email").Parse(msgTmpl))
+	return &MailSender{
+		addr:     addr,
+		auth:     auth,
+		from:     from,
+		template: t,
+	}
+}
+
+const emailTemplate = `Subject: your access token
+From: {{.From}}
+To: {{.To}}
+Date: {{.Date}}
+
+Hi,
+
+You requested an access token to login.
+
+Follow the link to login {{.Link}}
+
+If you didn't request an access token, please ignore this message.
+`
+
+func (s MailSender) Send(handle, link string) error {
+	var msg bytes.Buffer
+	data := struct {
+		From, Date, To, Link string
+	}{
+		From: s.from,
+		Date: time.Now().Format(time.RFC1123Z),
+		To:   handle,
+		Link: link,
+	}
+	if err := s.template.ExecuteTemplate(&msg, "email", data); err != nil {
+		return err
+	}
+	return smtp.SendMail(s.addr, s.auth, s.from, []string{handle}, msg.Bytes())
 }
