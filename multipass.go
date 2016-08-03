@@ -1,4 +1,4 @@
-package passless
+package multipass
 
 import (
 	"crypto/rand"
