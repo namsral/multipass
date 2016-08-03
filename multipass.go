@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
-	"io"
 	"log"
 	"net/http"
 	"net/smtp"
@@ -24,6 +23,8 @@ import (
 
 	jose "gopkg.in/square/go-jose.v1"
 )
+
+var ErrInvalidToken error = errors.New("invalid token")
 
 type Auth struct {
 	*Config
@@ -128,7 +129,7 @@ func extractToken(r *http.Request) (string, error) {
 	return "", fmt.Errorf("no token found")
 }
 
-func verify(token string, pk *rsa.PublicKey) ([]byte, error) {
+func verify(token string, pk rsa.PublicKey) ([]byte, error) {
 	var data []byte
 
 	obj, err := jose.ParseSigned(token)
@@ -177,19 +178,107 @@ func (c *Config) LoginURL(u url.URL, tokenStr string) url.URL {
 	return u
 }
 
-func publicKeyWriter(w io.Writer, pk *rsa.PublicKey) error {
-	data, err := x509.MarshalPKIXPublicKey(pk)
+func loginHandler(w http.ResponseWriter, r *http.Request, c *Config) (int, error) {
+	if r.Method == "POST" {
+		r.ParseForm()
+		handle := r.PostForm.Get("handle")
+		if len(handle) == 0 {
+			loc := path.Join(c.Basepath, "login")
+			http.Redirect(w, r, loc, http.StatusSeeOther)
+			return http.StatusSeeOther, nil
+		}
+		switch c.authorizer.IsAuthorized(handle) {
+		case true:
+			token, err := c.AccessToken(handle)
+			if err != nil {
+				log.Print(err)
+			}
+			siteURL, err := url.Parse(c.SiteAddr)
+			if err != nil {
+				log.Fatal(err)
+			}
+			loginURL := c.LoginURL(*siteURL, token)
+			if err := c.sender.Send(handle, loginURL.String()); err != nil {
+				log.Print(err)
+			}
+		}
+		w.Header().Add("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte("A login link has been sent to user with handle " + handle + " if your handle is authorized"))
+		return http.StatusOK, nil
+	}
+	if r.Method == "GET" {
+		if tokenStr := r.URL.Query().Get("token"); len(tokenStr) > 0 {
+			cookie := &http.Cookie{
+				Name:  "jwt_token",
+				Value: tokenStr,
+				Path:  "/",
+			}
+			http.SetCookie(w, cookie)
+			r.URL.Path = ""
+			r.URL.RawQuery = ""
+			http.Redirect(w, r, r.URL.String(), http.StatusSeeOther)
+			return http.StatusSeeOther, nil
+		}
+		w.Header().Add("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte("<html><body><form action=" + r.URL.Path + " method=POST><input type=text name=handle /><input type=submit></form></body></html>"))
+		return http.StatusOK, nil
+	}
+	return http.StatusMethodNotAllowed, nil
+}
+
+func signoutHandler(w http.ResponseWriter, r *http.Request, c *Config) (int, error) {
+	if cookie, err := r.Cookie("jwt_token"); err == nil {
+		cookie.Expires = time.Now().AddDate(-1, 0, 0)
+		cookie.MaxAge = -1
+		cookie.Path = "/"
+		http.SetCookie(w, cookie)
+	}
+	loc := path.Join(c.Basepath, "login")
+	http.Redirect(w, r, loc, http.StatusSeeOther)
+	return http.StatusSeeOther, nil
+}
+
+func publickeyHandler(w http.ResponseWriter, r *http.Request, c *Config) (int, error) {
+	data, err := x509.MarshalPKIXPublicKey(c.key.PublicKey)
 	if err != nil {
-		return err
+		return http.StatusInternalServerError, err
 	}
 	block := &pem.Block{
 		Type:  "PUBLIC KEY",
 		Bytes: data,
 	}
 	if err := pem.Encode(w, block); err != nil {
-		return err
+		return http.StatusInternalServerError, err
 	}
-	return nil
+	return http.StatusOK, nil
+}
+
+func tokenHandler(w http.ResponseWriter, r *http.Request, c *Config) (int, error) {
+	// Extract token from HTTP header, query parameter or cookie
+	tokenStr, err := extractToken(r)
+	if err != nil {
+		return http.StatusUnauthorized, ErrInvalidToken
+	}
+	var claims *Claims
+	if claims, err = validateToken(tokenStr, c.key.PublicKey); err != nil {
+		return http.StatusUnauthorized, ErrInvalidToken
+	}
+	// Authorize handle claim
+	if ok := c.authorizer.IsAuthorized(claims.Handle); !ok {
+		return http.StatusUnauthorized, ErrInvalidToken
+	}
+	// Verify path claim
+	var match bool
+	for _, path := range claims.Resources {
+		if httpserver.Path(r.URL.Path).Matches(path) {
+			match = true
+			continue
+		}
+	}
+	if !match {
+		return http.StatusUnauthorized, ErrInvalidToken
+	}
+	return http.StatusOK, nil
 }
 
 func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
@@ -207,111 +296,34 @@ func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 
 	switch r.URL.Path {
 	case path.Join(c.Basepath, "pub.cer"):
-		if err := publicKeyWriter(w, &c.key.PublicKey); err != nil {
-			return http.StatusInternalServerError, err
-		}
-		return http.StatusOK, nil
+		return publickeyHandler(w, r, c)
 	case path.Join(c.Basepath, "login"):
-		if r.Method == "POST" {
-			r.ParseForm()
-			handle := r.PostForm.Get("handle")
-			if len(handle) == 0 {
-				loc := path.Join(c.Basepath, "login")
-				http.Redirect(w, r, loc, http.StatusSeeOther)
-				return http.StatusSeeOther, nil
-			}
-			switch c.authorizer.IsAuthorized(handle) {
-			case true:
-				token, err := c.AccessToken(handle)
-				if err != nil {
-					log.Print(err)
-				}
-				siteURL, err := url.Parse(c.SiteAddr)
-				if err != nil {
-					log.Fatal(err)
-				}
-				loginURL := c.LoginURL(*siteURL, token)
-				if err := c.sender.Send(handle, loginURL.String()); err != nil {
-					log.Print(err)
-				}
-			}
-			w.Header().Add("Content-Type", "text/html; charset=utf-8")
-			w.Write([]byte("A login link has been sent to user with handle " + handle + " if your handle is authorized"))
-			return http.StatusOK, nil
-		}
-		if r.Method == "GET" {
-			if tokenStr := r.URL.Query().Get("token"); len(tokenStr) > 0 {
-				cookie := &http.Cookie{
-					Name:  "jwt_token",
-					Value: tokenStr,
-					Path:  "/",
-				}
-				http.SetCookie(w, cookie)
-				r.URL.Path = ""
-				r.URL.RawQuery = ""
-				http.Redirect(w, r, r.URL.String(), http.StatusSeeOther)
-				return http.StatusSeeOther, nil
-			}
-			w.Header().Add("Content-Type", "text/html; charset=utf-8")
-			w.Write([]byte("<html><body><form action=" + r.URL.Path + " method=POST><input type=text name=handle /><input type=submit></form></body></html>"))
-			return http.StatusOK, nil
-		}
-		return http.StatusMethodNotAllowed, nil
+		return loginHandler(w, r, c)
 	case path.Join(c.Basepath, "signout"):
-		if cookie, err := r.Cookie("jwt_token"); err == nil {
-			cookie.Expires = time.Now().AddDate(-1, 0, 0)
-			cookie.MaxAge = -1
-			cookie.Path = "/"
-			http.SetCookie(w, cookie)
+		return signoutHandler(w, r, c)
+	default:
+		if code, err := tokenHandler(w, r, c); err != nil {
+			return code, err
 		}
-		loc := path.Join(c.Basepath, "login")
-		http.Redirect(w, r, loc, http.StatusSeeOther)
-		return http.StatusSeeOther, nil
-	}
-	// Extract token from HTTP header, query parameter or cookie
-	tokenStr, err := extractToken(r)
-	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		loginformHandler(w, r)
-		return http.StatusOK, nil
-	}
-	var claims Claims
-	if claims, err = validateToken(tokenStr, &c.key.PublicKey); err != nil {
-		return http.StatusUnauthorized, err
-	}
-	// Authorize handle claim
-	if ok := c.authorizer.IsAuthorized(claims.Handle); !ok {
-		return http.StatusForbidden, nil
-	}
-	// Verify path claim
-	pathMatch = false
-	for _, path := range claims.Resources {
-		if httpserver.Path(r.URL.Path).Matches(path) {
-			pathMatch = true
-			continue
-		}
-	}
-	if !pathMatch {
-		return http.StatusForbidden, nil
 	}
 	return a.Next.ServeHTTP(w, r)
 }
 
-func validateToken(token string, key *rsa.PublicKey) (Claims, error) {
-	var claims Claims
+func validateToken(token string, key rsa.PublicKey) (*Claims, error) {
+	claims := &Claims{}
 
 	// Verify token signature
 	payload, err := verify(token, key)
 	if err != nil {
-		return claims, err
+		return nil, err
 	}
 	// Unmarshal token claims
 	if err := json.Unmarshal(payload, claims); err != nil {
-		return claims, err
+		return nil, err
 	}
 	// Verify expire claim
 	if time.Unix(claims.Expires, 0).Before(time.Now()) {
-		return claims, errors.New("Token expired")
+		return nil, errors.New("Token expired")
 	}
 	return claims, nil
 }
