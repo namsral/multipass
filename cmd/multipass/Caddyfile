@@ -1,5 +1,11 @@
-localhost:2020
-bind 127.0.0.1
-passless /search /passless bart@example.com lisa@example.com
-proxy / localhost:9821
-log stdout
+localhost {
+	bind 127.0.0.1
+	tls off
+	multipass {
+		path /
+		basepath /multipass
+		handles leeloo@dallas korben@dallas
+	}
+	proxy / localhost:9821
+	log stdout
+}
