@@ -15,9 +15,11 @@ func TestParse(t *testing.T) {
 	}{
 		{`multipass {
 			handles leeloo@dallas
+			mail_from no-reply@dallas
 		}`, false, []Rule{
 			{
-				Handles: []string{"leeloo@dallas"},
+				Handles:  []string{"leeloo@dallas"},
+				MailFrom: "no-reply@dallas",
 			},
 		}},
 		{`multipass {
@@ -25,14 +27,22 @@ func TestParse(t *testing.T) {
 			basepath /multipass
 			expires 24h
 			handles leeloo@dallas korben@dallas
-			transport smtp://user:password@host:port
+			smtp_addr localhost:2525
+			smtp_user admin
+			smtp_pass secret
+			mail_from "Multipass <no-reply@dallas>"
+			mail_tmpl email_template.eml
 		}`, false, []Rule{
 			{
-				Path:      "/resource",
-				Basepath:  "/multipass",
-				Expires:   time.Hour * 24,
-				Handles:   []string{"leeloo@dallas", "korben@dallas"},
-				Transport: "smtp://user:password@host:port",
+				Path:     "/resource",
+				Basepath: "/multipass",
+				Expires:  time.Hour * 24,
+				Handles:  []string{"leeloo@dallas", "korben@dallas"},
+				SMTPAddr: "localhost:2525",
+				SMTPUser: "admin",
+				SMTPPass: "secret",
+				MailFrom: "Multipass <no-reply@dallas>",
+				MailTmpl: "email_template.eml",
 			},
 		}},
 		{`multipass {
@@ -42,7 +52,7 @@ func TestParse(t *testing.T) {
 	}
 	for i, test := range tests {
 		actual, err := parse(caddy.NewTestController("http", test.input))
-		if err != nil && test.shouldErr {
+		if err == nil && test.shouldErr {
 			t.Errorf("test #%d should return an error, but did not", i)
 		} else if err != nil && !test.shouldErr {
 			t.Errorf("test #%d should not return an error, but did", i)
@@ -62,8 +72,20 @@ func TestParse(t *testing.T) {
 			if actualRule.Expires != expectedRule.Expires {
 				t.Errorf("test #%d, rule #%d: expected '%s', actual '%s'", i, j, expectedRule.Expires, actualRule.Expires)
 			}
-			if actualRule.Transport != expectedRule.Transport {
-				t.Errorf("test #%d, rule #%d: expected '%s', actual '%s'", i, j, expectedRule.Transport, actualRule.Transport)
+			if actualRule.SMTPAddr != expectedRule.SMTPAddr {
+				t.Errorf("test #%d, rule #%d: expected '%s', actual '%s'", i, j, expectedRule.SMTPAddr, actualRule.SMTPAddr)
+			}
+			if actualRule.SMTPUser != expectedRule.SMTPUser {
+				t.Errorf("test #%d, rule #%d: expected '%s', actual '%s'", i, j, expectedRule.SMTPUser, actualRule.SMTPUser)
+			}
+			if actualRule.SMTPPass != expectedRule.SMTPPass {
+				t.Errorf("test #%d, rule #%d: expected '%s', actual '%s'", i, j, expectedRule.SMTPPass, actualRule.SMTPPass)
+			}
+			if actualRule.MailFrom != expectedRule.MailFrom {
+				t.Errorf("test #%d, rule #%d: expected '%s', actual '%s'", i, j, expectedRule.MailFrom, actualRule.MailFrom)
+			}
+			if actualRule.MailTmpl != expectedRule.MailTmpl {
+				t.Errorf("test #%d, rule #%d: expected '%s', actual '%s'", i, j, expectedRule.MailTmpl, actualRule.MailTmpl)
 			}
 			if len(actualRule.Handles) != len(expectedRule.Handles) {
 				t.Errorf("test #%d: expected %d handles, actual %d handles", i, len(expectedRule.Handles), len(actualRule.Handles))

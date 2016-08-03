@@ -5,6 +5,8 @@ localhost {
 		path /
 		basepath /multipass
 		handles leeloo@dallas korben@dallas
+		mail_from "Multipass <no-reply@dallas>"
+		smtp_addr localhost:2525
 	}
 	proxy / localhost:9821
 	log stdout

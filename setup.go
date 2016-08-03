@@ -66,18 +66,18 @@ func parse(c *caddy.Controller) ([]Rule, error) {
 						return rules, c.Err("Expecting only one resource per line")
 					}
 					rule.Path = args[0]
-				case "transport":
-					args := c.RemainingArgs()
-					if len(args) != 1 {
-						return rules, c.Err("Expecting a single transport")
-					}
-					rule.Transport = args[0]
 				case "basepath":
 					args := c.RemainingArgs()
 					if len(args) != 1 {
 						return rules, c.Err("Expecting a single basepath")
 					}
 					rule.Basepath = args[0]
+				case "handles":
+					args := c.RemainingArgs()
+					if len(args) <= 0 {
+						return rules, c.Err("Expecting at least one handle")
+					}
+					rule.Handles = args
 				case "expires":
 					args := c.RemainingArgs()
 					if len(args) != 1 {
@@ -88,13 +88,43 @@ func parse(c *caddy.Controller) ([]Rule, error) {
 						return rules, c.Err("Expecting a valida Go formatted time duration")
 					}
 					rule.Expires = d
-				case "handles":
+				case "smtp_addr":
 					args := c.RemainingArgs()
-					if len(args) <= 0 {
-						return rules, c.Err("Expecting at least one handle")
+					if len(args) != 1 {
+						return rules, c.Err("Expecting a single SMTP address")
 					}
-					rule.Handles = args
+					rule.SMTPAddr = args[0]
+				case "smtp_user":
+					args := c.RemainingArgs()
+					if len(args) != 1 {
+						return rules, c.Err("Expecting a single SMTP username")
+					}
+					rule.SMTPUser = args[0]
+				case "smtp_pass":
+					args := c.RemainingArgs()
+					if len(args) != 1 {
+						return rules, c.Err("Expecting a single SMTP password")
+					}
+					rule.SMTPPass = args[0]
+				case "mail_from":
+					args := c.RemainingArgs()
+					if len(args) != 1 {
+						return rules, c.Err("Expecting a single mail from address")
+					}
+					rule.MailFrom = args[0]
+				case "mail_tmpl":
+					args := c.RemainingArgs()
+					if len(args) != 1 {
+						return rules, c.Err("Expecting a single mail template")
+					}
+					rule.MailTmpl = args[0]
 				}
+			}
+			if len(rule.Handles) == 0 {
+				return rules, c.Err("Expecting at least one handle")
+			}
+			if len(rule.MailFrom) == 0 {
+				return rules, c.Err("Expecting a single mail from addres")
 			}
 			rules = append(rules, rule)
 		default:

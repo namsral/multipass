@@ -31,11 +31,13 @@ type Auth struct {
 }
 
 type Rule struct {
-	Path      string
-	Basepath  string
-	Expires   time.Duration
-	Handles   []string
-	Transport string
+	Path     string
+	Basepath string
+	Expires  time.Duration
+	Handles  []string
+
+	SMTPAddr, SMTPUser, SMTPPass string
+	MailFrom, MailTmpl           string
 }
 
 type Config struct {
@@ -64,10 +66,15 @@ func ConfigFromRule(r Rule) (*Config, error) {
 		config.Expires = r.Expires
 	}
 
-	addr := "localhost:2525"
-	from := "no-reply@example.com"
-	msgTmpl := emailTemplate
-	config.sender = NewMailSender(addr, nil, from, msgTmpl)
+	smtpAddr := "localhost:25"
+	if len(r.SMTPAddr) > 0 {
+		smtpAddr = r.SMTPAddr
+	}
+	mailTmpl := emailTemplate
+	if len(r.MailTmpl) > 0 {
+		mailTmpl = r.MailTmpl
+	}
+	config.sender = NewMailSender(smtpAddr, nil, r.MailFrom, mailTmpl)
 
 	authorizer := &EmailAuthorizer{list: []string{}}
 	for _, handle := range r.Handles {
