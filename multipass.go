@@ -31,17 +31,17 @@ type Auth struct {
 }
 
 type Rule struct {
-	Path     string
-	Basepath string
-	Expires  time.Duration
-	Handles  []string
+	Basepath  string
+	Expires   time.Duration
+	Resources []string
+	Handles   []string
 
 	SMTPAddr, SMTPUser, SMTPPass string
 	MailFrom, MailTmpl           string
 }
 
 type Config struct {
-	PathScope string
+	Resources []string
 	Basepath  string
 	Expires   time.Duration
 
@@ -56,8 +56,8 @@ func ConfigFromRule(r Rule) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(r.Path) > 0 {
-		config.PathScope = r.Path
+	if len(r.Resources) > 0 {
+		config.Resources = r.Resources
 	}
 	if len(r.Basepath) > 0 {
 		config.Basepath = r.Basepath
@@ -95,7 +95,7 @@ func NewConfig() (*Config, error) {
 		return nil, err
 	}
 	return &Config{
-		PathScope: "/",
+		Resources: []string{"/"},
 		Basepath:  "/",
 		Expires:   time.Hour * 24,
 		key:       pk,
@@ -142,17 +142,17 @@ func verify(token string, pk rsa.PublicKey) ([]byte, error) {
 }
 
 type claims struct {
-	Handle  string `json:"handle"`
-	Path    string `json:"path"`
-	Expires int64  `json:"exp"`
+	Handle    string   `json:"handle"`
+	Resources []string `json:"resources"`
+	Expires   int64    `json:"exp"`
 }
 
 func (c *Config) AccessToken(handle string) (tokenStr string, err error) {
 	exp := time.Now().Add(c.Expires)
 	claims := &claims{
-		Handle:  handle,
-		Path:    c.PathScope,
-		Expires: exp.Unix(),
+		Handle:    handle,
+		Resources: c.Resources,
+		Expires:   exp.Unix(),
 	}
 	payload, err := json.Marshal(claims)
 	if err != nil {
@@ -192,7 +192,14 @@ func publicKeyWriter(w io.Writer, pk *rsa.PublicKey) error {
 
 func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 	c := a.Config
-	if !httpserver.Path(r.URL.Path).Matches(c.PathScope) {
+	var pathMatch bool
+	for _, path := range c.Resources {
+		if httpserver.Path(r.URL.Path).Matches(path) {
+			pathMatch = true
+			continue
+		}
+	}
+	if !pathMatch {
 		return a.Next.ServeHTTP(w, r)
 	}
 
@@ -281,12 +288,18 @@ func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 		return http.StatusForbidden, nil
 	}
 	// Verify path claim
-	if claims.Path != c.PathScope {
+	pathMatch = false
+	for _, path := range claims.Resources {
+		if httpserver.Path(r.URL.Path).Matches(path) {
+			pathMatch = true
+			continue
+		}
+	}
+	if !pathMatch {
 		return http.StatusForbidden, nil
 	}
 	// Authorize handle claim
 	if ok := c.authorizer.IsAuthorized(claims.Handle); !ok {
-		return http.StatusForbidden, nil
 	}
 	return a.Next.ServeHTTP(w, r)
 }

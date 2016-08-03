@@ -60,12 +60,9 @@ func parse(c *caddy.Controller) ([]Rule, error) {
 		case 0:
 			for c.NextBlock() {
 				switch c.Val() {
-				case "path":
+				case "resources":
 					args := c.RemainingArgs()
-					if len(args) != 1 {
-						return rules, c.Err("Expecting only one resource per line")
-					}
-					rule.Path = args[0]
+					rule.Resources = args
 				case "basepath":
 					args := c.RemainingArgs()
 					if len(args) != 1 {

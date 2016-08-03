@@ -23,7 +23,7 @@ func TestParse(t *testing.T) {
 			},
 		}},
 		{`multipass {
-			path /resource
+			resources /fhloston /paradise
 			basepath /multipass
 			expires 24h
 			handles leeloo@dallas korben@dallas
@@ -34,19 +34,18 @@ func TestParse(t *testing.T) {
 			mail_tmpl email_template.eml
 		}`, false, []Rule{
 			{
-				Path:     "/resource",
-				Basepath: "/multipass",
-				Expires:  time.Hour * 24,
-				Handles:  []string{"leeloo@dallas", "korben@dallas"},
-				SMTPAddr: "localhost:2525",
-				SMTPUser: "admin",
-				SMTPPass: "secret",
-				MailFrom: "Multipass <no-reply@dallas>",
-				MailTmpl: "email_template.eml",
+				Resources: []string{"/fhloston", "paradise"},
+				Basepath:  "/multipass",
+				Expires:   time.Hour * 24,
+				Handles:   []string{"leeloo@dallas", "korben@dallas"},
+				SMTPAddr:  "localhost:2525",
+				SMTPUser:  "admin",
+				SMTPPass:  "secret",
+				MailFrom:  "Multipass <no-reply@dallas>",
+				MailTmpl:  "email_template.eml",
 			},
 		}},
 		{`multipass {
-			path /resource
 		  }`, true, []Rule{},
 		},
 		{`multipass {
@@ -72,8 +71,8 @@ func TestParse(t *testing.T) {
 
 		for j, expectedRule := range test.expected {
 			actualRule := actual[j]
-			if actualRule.Path != expectedRule.Path {
-				t.Errorf("test #%d, rule #%d: expected '%s', actual '%s'", i, j, expectedRule.Path, actualRule.Path)
+			if len(actualRule.Resources) != len(expectedRule.Resources) {
+				t.Errorf("test #%d: expected %d Resources, actual %d Resources", i, len(expectedRule.Resources), len(actualRule.Resources))
 			}
 			if actualRule.Basepath != expectedRule.Basepath {
 				t.Errorf("test #%d, rule #%d: expected '%s', actual '%s'", i, j, expectedRule.Basepath, actualRule.Basepath)
