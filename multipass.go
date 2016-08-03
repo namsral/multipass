@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -26,8 +27,7 @@ import (
 
 type Auth struct {
 	*Config
-	SiteAddr string
-	Next     httpserver.Handler
+	Next httpserver.Handler
 }
 
 type Rule struct {
@@ -43,6 +43,7 @@ type Rule struct {
 type Config struct {
 	Resources []string
 	Basepath  string
+	SiteAddr  string
 	Expires   time.Duration
 
 	sender     Sender
@@ -127,7 +128,7 @@ func extractToken(r *http.Request) (string, error) {
 	return "", fmt.Errorf("no token found")
 }
 
-func verify(token string, pk rsa.PublicKey) ([]byte, error) {
+func verify(token string, pk *rsa.PublicKey) ([]byte, error) {
 	var data []byte
 
 	obj, err := jose.ParseSigned(token)
@@ -141,7 +142,8 @@ func verify(token string, pk rsa.PublicKey) ([]byte, error) {
 	return data, nil
 }
 
-type claims struct {
+// Claims are part of the JSON web token
+type Claims struct {
 	Handle    string   `json:"handle"`
 	Resources []string `json:"resources"`
 	Expires   int64    `json:"exp"`
@@ -149,7 +151,7 @@ type claims struct {
 
 func (c *Config) AccessToken(handle string) (tokenStr string, err error) {
 	exp := time.Now().Add(c.Expires)
-	claims := &claims{
+	claims := &Claims{
 		Handle:    handle,
 		Resources: c.Resources,
 		Expires:   exp.Unix(),
@@ -224,7 +226,7 @@ func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 				if err != nil {
 					log.Print(err)
 				}
-				siteURL, err := url.Parse(a.SiteAddr)
+				siteURL, err := url.Parse(c.SiteAddr)
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -273,18 +275,12 @@ func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 		loginformHandler(w, r)
 		return http.StatusOK, nil
 	}
-	// Verify token signature
-	payload, err := verify(tokenStr, c.key.PublicKey)
-	if err != nil {
+	var claims Claims
+	if claims, err = validateToken(tokenStr, &c.key.PublicKey); err != nil {
 		return http.StatusUnauthorized, err
 	}
-	// Unmarshal token claims
-	claims := &claims{}
-	if err := json.Unmarshal(payload, claims); err != nil {
-		return http.StatusUnauthorized, err
-	}
-	// Verify expire claim
-	if time.Unix(claims.Expires, 0).Before(time.Now()) {
+	// Authorize handle claim
+	if ok := c.authorizer.IsAuthorized(claims.Handle); !ok {
 		return http.StatusForbidden, nil
 	}
 	// Verify path claim
@@ -298,10 +294,26 @@ func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 	if !pathMatch {
 		return http.StatusForbidden, nil
 	}
-	// Authorize handle claim
-	if ok := c.authorizer.IsAuthorized(claims.Handle); !ok {
-	}
 	return a.Next.ServeHTTP(w, r)
+}
+
+func validateToken(token string, key *rsa.PublicKey) (Claims, error) {
+	var claims Claims
+
+	// Verify token signature
+	payload, err := verify(token, key)
+	if err != nil {
+		return claims, err
+	}
+	// Unmarshal token claims
+	if err := json.Unmarshal(payload, claims); err != nil {
+		return claims, err
+	}
+	// Verify expire claim
+	if time.Unix(claims.Expires, 0).Before(time.Now()) {
+		return claims, errors.New("Token expired")
+	}
+	return claims, nil
 }
 
 func loginformHandler(w http.ResponseWriter, r *http.Request) {

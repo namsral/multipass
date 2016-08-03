@@ -40,11 +40,11 @@ func setup(c *caddy.Controller) error {
 	}
 
 	cfg := httpserver.GetConfig(c)
+	config.SiteAddr = cfg.Addr.String()
 	mid := func(next httpserver.Handler) httpserver.Handler {
 		return &Auth{
-			SiteAddr: cfg.Addr.String(),
-			Config:   config,
-			Next:     next,
+			Config: config,
+			Next:   next,
 		}
 	}
 	cfg.AddMiddleware(mid)
