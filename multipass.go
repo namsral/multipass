@@ -129,14 +129,14 @@ func extractToken(r *http.Request) (string, error) {
 	return "", fmt.Errorf("no token found")
 }
 
-func verify(token string, pk rsa.PublicKey) ([]byte, error) {
+func verifyToken(token string, key rsa.PublicKey) ([]byte, error) {
 	var data []byte
 
 	obj, err := jose.ParseSigned(token)
 	if err != nil {
 		return data, err
 	}
-	data, err = obj.Verify(&pk)
+	data, err = obj.Verify(&key)
 	if err != nil {
 		return data, err
 	}
@@ -313,7 +313,7 @@ func validateToken(token string, key rsa.PublicKey) (*Claims, error) {
 	claims := &Claims{}
 
 	// Verify token signature
-	payload, err := verify(token, key)
+	payload, err := verifyToken(token, key)
 	if err != nil {
 		return nil, err
 	}
