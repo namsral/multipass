@@ -27,28 +27,30 @@ __User access flow:__
 
 __Configuration:__
 
-In the following example, the service running on `localhost:9821` is proxied and protected to allow only users with handles leeloo@dallas and korben@dallas to access the  `/admin` resource.
+In the following example, the service running on `localhost:9821` is proxied and protected to allow only users with handles leeloo@dallas and korben@dallas to access the  `/fhloston` and `/paradise` resources.
 
 ```
 example.com {
 	bind 0.0.0.0
 	multipass {
-		path /admin
+		resources /fhloston /paradise
 		handles leeloo@dallas korben@dallas
 		basepath /multipass
 		expires 24h
 		smtp_addr localhost:2525
+		mail_from "Multipass <no-reply@dallas>"
 	}
 	proxy / localhost:9821
 	log stdout
 }
 ```
 
-- __path__: path scope of the protect resource. _Default: /_
+- __resource__: path of resources to protect. _Default: /_
 - __handles__: the handles which identify the users. _Required_
 - __basepath__: path to the log-in and sign-out page. _Default: /_
 - __expires__: The time duration after which the token expires. Any time duration Go can [parse][goduration]. _Default: 12h_
 - __smtp_addr__: Mailserver address used for sending login links. _Default: localhost:25_
+- __mail_from__: From address used in email messages sent to users. _Required_
 
 
 __JWT__
