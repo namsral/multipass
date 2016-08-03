@@ -1,6 +1,7 @@
 package multipass
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -29,21 +30,20 @@ func setup(c *caddy.Controller) error {
 	if err != nil {
 		return err
 	}
+	if len(rules) == 0 {
+		return errors.New("No directive declared")
+	}
 
-	var configs []*Config
-	for _, r := range rules {
-		c, err := ConfigFromRule(r)
-		if err != nil {
-			return err
-		}
-		configs = append(configs, c)
+	config, err := ConfigFromRule(rules[0])
+	if err != nil {
+		return err
 	}
 
 	cfg := httpserver.GetConfig(c)
 	mid := func(next httpserver.Handler) httpserver.Handler {
 		return &Auth{
 			SiteAddr: cfg.Addr.String(),
-			Configs:  configs,
+			Config:   config,
 			Next:     next,
 		}
 	}
@@ -125,6 +125,9 @@ func parse(c *caddy.Controller) ([]Rule, error) {
 			}
 			if len(rule.MailFrom) == 0 {
 				return rules, c.Err("Expecting a single mail from addres")
+			}
+			if len(rules) > 0 {
+				return rules, c.Err("Expecting one directive per site")
 			}
 			rules = append(rules, rule)
 		default:

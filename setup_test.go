@@ -47,7 +47,16 @@ func TestParse(t *testing.T) {
 		}},
 		{`multipass {
 			path /resource
-		}`, true, []Rule{},
+		  }`, true, []Rule{},
+		},
+		{`multipass {
+			handles leeloo@dallas korben@dallas
+			mail_from "Multipass <no-reply@dallas>"
+		  }
+		  multipass {
+			handles leeloo@dallas korben@dallas
+			mail_from "Multipass <no-reply@dallas>"
+		  }`, true, []Rule{},
 		},
 	}
 	for i, test := range tests {

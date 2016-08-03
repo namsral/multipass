@@ -25,7 +25,7 @@ import (
 )
 
 type Auth struct {
-	Configs  []*Config
+	*Config
 	SiteAddr string
 	Next     httpserver.Handler
 }
@@ -191,13 +191,8 @@ func publicKeyWriter(w io.Writer, pk *rsa.PublicKey) error {
 }
 
 func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
-	var c *Config
-	for i := range a.Configs {
-		if httpserver.Path(r.URL.Path).Matches(a.Configs[i].PathScope) {
-			c = a.Configs[i]
-		}
-	}
-	if c == nil {
+	c := a.Config
+	if !httpserver.Path(r.URL.Path).Matches(c.PathScope) {
 		return a.Next.ServeHTTP(w, r)
 	}
 
