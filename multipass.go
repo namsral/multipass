@@ -1,7 +1,6 @@
 package multipass
 
 import (
-	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -9,14 +8,11 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"html/template"
 	"log"
 	"net/http"
-	"net/smtp"
 	"net/url"
 	"path"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/mholt/caddy/caddyhttp/httpserver"
@@ -103,44 +99,6 @@ func NewConfig() (*Config, error) {
 		key:       pk,
 		signer:    signer,
 	}, nil
-}
-
-// extractToken returns the JWT token embedded in the given request.
-// JWT tokens can be embedded in the header prefixed with "Bearer ", with a
-// "token" key query parameter or a cookie named "jwt_token".
-func extractToken(r *http.Request) (string, error) {
-	//from header
-	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
-		if len(h) > 7 {
-			return h[7:], nil
-		}
-	}
-
-	//from query parameter
-	if token := r.URL.Query().Get("token"); len(token) > 0 {
-		return token, nil
-	}
-
-	//from cookie
-	if cookie, err := r.Cookie("jwt_token"); err == nil {
-		return cookie.Value, nil
-	}
-
-	return "", fmt.Errorf("no token found")
-}
-
-func verifyToken(token string, key rsa.PublicKey) ([]byte, error) {
-	var data []byte
-
-	obj, err := jose.ParseSigned(token)
-	if err != nil {
-		return data, err
-	}
-	data, err = obj.Verify(&key)
-	if err != nil {
-		return data, err
-	}
-	return data, nil
 }
 
 // Claims are part of the JSON web token
@@ -324,6 +282,30 @@ func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 	return a.Next.ServeHTTP(w, r)
 }
 
+// extractToken returns the JWT token embedded in the given request.
+// JWT tokens can be embedded in the header prefixed with "Bearer ", with a
+// "token" key query parameter or a cookie named "jwt_token".
+func extractToken(r *http.Request) (string, error) {
+	//from header
+	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+		if len(h) > 7 {
+			return h[7:], nil
+		}
+	}
+
+	//from query parameter
+	if token := r.URL.Query().Get("token"); len(token) > 0 {
+		return token, nil
+	}
+
+	//from cookie
+	if cookie, err := r.Cookie("jwt_token"); err == nil {
+		return cookie.Value, nil
+	}
+
+	return "", fmt.Errorf("no token found")
+}
+
 func validateToken(token string, key rsa.PublicKey) (*Claims, error) {
 	claims := &Claims{}
 
@@ -343,82 +325,16 @@ func validateToken(token string, key rsa.PublicKey) (*Claims, error) {
 	return claims, nil
 }
 
-type Authorizer interface {
-	IsAuthorized(handle string) bool
-	Add(handle string) error
-}
+func verifyToken(token string, key rsa.PublicKey) ([]byte, error) {
+	var data []byte
 
-type EmailAuthorizer struct {
-	lock sync.Mutex
-	list []string
-}
-
-func (a *EmailAuthorizer) Add(handle string) error {
-	a.lock.Lock()
-	a.list = append(a.list, handle)
-	a.lock.Unlock()
-	return nil
-}
-
-func (a *EmailAuthorizer) IsAuthorized(handle string) bool {
-	a.lock.Lock()
-	for _, e := range a.list {
-		if e == handle {
-			a.lock.Unlock()
-			return true
-		}
+	obj, err := jose.ParseSigned(token)
+	if err != nil {
+		return data, err
 	}
-	a.lock.Unlock()
-	return false
-}
-
-type Sender interface {
-	Send(handle, loginURL string) error
-}
-
-type MailSender struct {
-	auth     smtp.Auth
-	addr     string
-	from     string
-	template *template.Template
-}
-
-func NewMailSender(addr string, auth smtp.Auth, from, msgTmpl string) *MailSender {
-	t := template.Must(template.New("email").Parse(msgTmpl))
-	return &MailSender{
-		addr:     addr,
-		auth:     auth,
-		from:     from,
-		template: t,
+	data, err = obj.Verify(&key)
+	if err != nil {
+		return data, err
 	}
-}
-
-const emailTemplate = `Subject: your access token
-From: {{.From}}
-To: {{.To}}
-Date: {{.Date}}
-
-Hi,
-
-You requested an access token to login.
-
-Follow the link to login {{.Link}}
-
-If you didn't request an access token, please ignore this message.
-`
-
-func (s MailSender) Send(handle, link string) error {
-	var msg bytes.Buffer
-	data := struct {
-		From, Date, To, Link string
-	}{
-		From: s.from,
-		Date: time.Now().Format(time.RFC1123Z),
-		To:   handle,
-		Link: link,
-	}
-	if err := s.template.ExecuteTemplate(&msg, "email", data); err != nil {
-		return err
-	}
-	return smtp.SendMail(s.addr, s.auth, s.from, []string{handle}, msg.Bytes())
+	return data, nil
 }
