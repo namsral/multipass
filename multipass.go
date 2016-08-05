@@ -181,7 +181,6 @@ func loginHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 			if s := r.URL.Query().Get("url"); len(s) > 0 {
 				nexturl = s
 			}
-			println("-------", nexturl)
 			http.Redirect(w, r, nexturl, http.StatusSeeOther)
 			return http.StatusSeeOther, nil
 		}
