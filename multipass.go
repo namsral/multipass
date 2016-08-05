@@ -20,7 +20,7 @@ import (
 	jose "gopkg.in/square/go-jose.v1"
 )
 
-var ErrInvalidToken error = errors.New("invalid token")
+var ErrInvalidToken = errors.New("invalid token")
 
 type Auth struct {
 	*Multipass
