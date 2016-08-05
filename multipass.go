@@ -9,7 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"net/smtp"
 	"net/url"
 	"path"
 	"strings"
@@ -63,15 +65,27 @@ func NewMultipassFromRule(r Rule) (*Multipass, error) {
 		m.Expires = r.Expires
 	}
 
-	smtpAddr := "localhost:25"
-	if len(r.SMTPAddr) > 0 {
-		smtpAddr = r.SMTPAddr
-	}
 	mailTmpl := emailTemplate
 	if len(r.MailTmpl) > 0 {
 		mailTmpl = r.MailTmpl
 	}
-	handler := NewEmailHandler(smtpAddr, nil, r.MailFrom, mailTmpl)
+
+	host := "localhost"
+	port := "25"
+	if h, p, err := net.SplitHostPort(r.SMTPAddr); err == nil {
+		host = h
+		port = p
+	} else {
+		host = r.SMTPAddr
+	}
+
+	var auth smtp.Auth
+	if len(r.SMTPUser) > 0 && len(r.SMTPPass) > 0 {
+		auth = smtp.PlainAuth("", r.SMTPUser, r.SMTPPass, host)
+	}
+
+	addr := strings.Join([]string{host, port}, ":")
+	handler := NewEmailHandler(addr, auth, r.MailFrom, mailTmpl)
 	for _, handle := range r.Handles {
 		handler.Register(handle)
 	}
