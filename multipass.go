@@ -43,10 +43,9 @@ type Multipass struct {
 	SiteAddr  string
 	Expires   time.Duration
 
-	sender     Sender
-	authorizer Authorizer
-	signer     jose.Signer
-	key        *rsa.PrivateKey
+	Handler HandleService
+	signer  jose.Signer
+	key     *rsa.PrivateKey
 }
 
 func NewMultipassFromRule(r Rule) (*Multipass, error) {
@@ -72,13 +71,11 @@ func NewMultipassFromRule(r Rule) (*Multipass, error) {
 	if len(r.MailTmpl) > 0 {
 		mailTmpl = r.MailTmpl
 	}
-	m.sender = NewMailSender(smtpAddr, nil, r.MailFrom, mailTmpl)
-
-	authorizer := &EmailAuthorizer{list: []string{}}
+	handler := NewEmailHandler(smtpAddr, nil, r.MailFrom, mailTmpl)
 	for _, handle := range r.Handles {
-		authorizer.Add(handle)
+		handler.Register(handle)
 	}
-	m.authorizer = authorizer
+	m.Handler = handler
 
 	return m, nil
 }
@@ -147,7 +144,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 			http.Redirect(w, r, loc, http.StatusSeeOther)
 			return http.StatusSeeOther, nil
 		}
-		if m.authorizer.IsAuthorized(handle) {
+		if m.Handler.Listed(handle) {
 			token, err := m.AccessToken(handle)
 			if err != nil {
 				log.Print(err)
@@ -160,7 +157,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 			if err != nil {
 				log.Print(err)
 			}
-			if err := m.sender.Send(handle, loginURL.String()); err != nil {
+			if err := m.Handler.Notify(handle, loginURL.String()); err != nil {
 				log.Print(err)
 			}
 		}
@@ -251,7 +248,7 @@ func tokenHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 		return http.StatusUnauthorized, ErrInvalidToken
 	}
 	// Authorize handle claim
-	if ok := m.authorizer.IsAuthorized(claims.Handle); !ok {
+	if ok := m.Handler.Listed(claims.Handle); !ok {
 		return http.StatusUnauthorized, ErrInvalidToken
 	}
 	// Verify path claim
