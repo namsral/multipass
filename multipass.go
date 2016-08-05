@@ -127,13 +127,15 @@ func (m *Multipass) AccessToken(handle string) (tokenStr string, err error) {
 	return jws.CompactSerialize()
 }
 
-func (m *Multipass) LoginURL(u url.URL, tokenStr string) url.URL {
-	u.Path = path.Join(m.Basepath, "login")
-	v := url.Values{}
-	v.Set("token", tokenStr)
+func NewLoginURL(siteaddr, basepath, token string, v url.Values) (*url.URL, error) {
+	u, err := url.Parse(siteaddr)
+	if err != nil {
+		return u, err
+	}
+	u.Path = path.Join(basepath, "login")
+	v.Set("token", token)
 	u.RawQuery = v.Encode()
-
-	return u
+	return u, nil
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
@@ -145,17 +147,19 @@ func loginHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 			http.Redirect(w, r, loc, http.StatusSeeOther)
 			return http.StatusSeeOther, nil
 		}
-		switch m.authorizer.IsAuthorized(handle) {
-		case true:
+		if m.authorizer.IsAuthorized(handle) {
 			token, err := m.AccessToken(handle)
 			if err != nil {
 				log.Print(err)
 			}
-			siteURL, err := url.Parse(m.SiteAddr)
-			if err != nil {
-				log.Fatal(err)
+			values := url.Values{}
+			if s := r.PostForm.Get("url"); len(s) > 0 {
+				values.Set("url", s)
 			}
-			loginURL := m.LoginURL(*siteURL, token)
+			loginURL, err := NewLoginURL(m.SiteAddr, m.Basepath, token, values)
+			if err != nil {
+				log.Print(err)
+			}
 			if err := m.sender.Send(handle, loginURL.String()); err != nil {
 				log.Print(err)
 			}
@@ -172,9 +176,13 @@ func loginHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 				Path:  "/",
 			}
 			http.SetCookie(w, cookie)
-			r.URL.Path = ""
-			r.URL.RawQuery = ""
-			http.Redirect(w, r, r.URL.String(), http.StatusSeeOther)
+
+			nexturl := m.SiteAddr
+			if s := r.URL.Query().Get("url"); len(s) > 0 {
+				nexturl = s
+			}
+			println("-------", nexturl)
+			http.Redirect(w, r, nexturl, http.StatusSeeOther)
 			return http.StatusSeeOther, nil
 		}
 		w.Header().Add("Content-Type", "text/html; charset=utf-8")
@@ -185,11 +193,19 @@ func loginHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 }
 
 func loginformHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
+	nextURL, err := url.Parse(m.SiteAddr)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+	nextURL.Path = r.URL.Path
+	nextURL.RawQuery = r.URL.RawQuery
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(`
 <html><body>
+<h1>Multipass</h1>
+<p>Enter your user handle to gain access to ` + nextURL.String() + `</p>
 <form action="` + path.Join(m.Basepath, "/login") + `" method=POST>
-<input type=hidden name=url value="` + r.URL.String() + `"/>
+<input type=hidden name=url value="` + nextURL.String() + `"/>
 <input type=text name=handle />
 <input type=submit>
 </form></body></html>
