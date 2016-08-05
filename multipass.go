@@ -210,7 +210,7 @@ func signoutHandler(w http.ResponseWriter, r *http.Request, c *Config) (int, err
 }
 
 func publickeyHandler(w http.ResponseWriter, r *http.Request, c *Config) (int, error) {
-	data, err := x509.MarshalPKIXPublicKey(c.key.PublicKey)
+	data, err := x509.MarshalPKIXPublicKey(&c.key.PublicKey)
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
@@ -218,10 +218,10 @@ func publickeyHandler(w http.ResponseWriter, r *http.Request, c *Config) (int, e
 		Type:  "PUBLIC KEY",
 		Bytes: data,
 	}
+	w.Header().Set("Content-Type", "application/pkix-cert")
 	if err := pem.Encode(w, block); err != nil {
 		return http.StatusInternalServerError, err
 	}
-	w.Header().Set("Content-Type", "application/pkix-cert")
 	return http.StatusOK, nil
 }
 
