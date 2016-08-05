@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"html"
 	"log"
 	"net"
 	"net/http"
@@ -85,7 +86,8 @@ func NewMultipassFromRule(r Rule) (*Multipass, error) {
 	}
 
 	addr := strings.Join([]string{host, port}, ":")
-	handler := NewEmailHandler(addr, auth, r.MailFrom, mailTmpl)
+	from := html.UnescapeString(r.MailFrom)
+	handler := NewEmailHandler(addr, auth, from, mailTmpl)
 	for _, handle := range r.Handles {
 		handler.Register(handle)
 	}
