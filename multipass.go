@@ -23,7 +23,7 @@ import (
 var ErrInvalidToken error = errors.New("invalid token")
 
 type Auth struct {
-	*Config
+	*Multipass
 	Next httpserver.Handler
 }
 
@@ -37,7 +37,7 @@ type Rule struct {
 	MailFrom, MailTmpl           string
 }
 
-type Config struct {
+type Multipass struct {
 	Resources []string
 	Basepath  string
 	SiteAddr  string
@@ -49,19 +49,19 @@ type Config struct {
 	key        *rsa.PrivateKey
 }
 
-func ConfigFromRule(r Rule) (*Config, error) {
-	config, err := NewConfig()
+func NewMultipassFromRule(r Rule) (*Multipass, error) {
+	m, err := NewMultipass()
 	if err != nil {
 		return nil, err
 	}
 	if len(r.Resources) > 0 {
-		config.Resources = r.Resources
+		m.Resources = r.Resources
 	}
 	if len(r.Basepath) > 0 {
-		config.Basepath = r.Basepath
+		m.Basepath = r.Basepath
 	}
 	if r.Expires > 0 {
-		config.Expires = r.Expires
+		m.Expires = r.Expires
 	}
 
 	smtpAddr := "localhost:25"
@@ -72,18 +72,18 @@ func ConfigFromRule(r Rule) (*Config, error) {
 	if len(r.MailTmpl) > 0 {
 		mailTmpl = r.MailTmpl
 	}
-	config.sender = NewMailSender(smtpAddr, nil, r.MailFrom, mailTmpl)
+	m.sender = NewMailSender(smtpAddr, nil, r.MailFrom, mailTmpl)
 
 	authorizer := &EmailAuthorizer{list: []string{}}
 	for _, handle := range r.Handles {
 		authorizer.Add(handle)
 	}
-	config.authorizer = authorizer
+	m.authorizer = authorizer
 
-	return config, nil
+	return m, nil
 }
 
-func NewConfig() (*Config, error) {
+func NewMultipass() (*Multipass, error) {
 	pk, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, err
@@ -92,7 +92,7 @@ func NewConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Config{
+	return &Multipass{
 		Resources: []string{"/"},
 		Basepath:  "/",
 		Expires:   time.Hour * 24,
@@ -108,18 +108,18 @@ type Claims struct {
 	Expires   int64    `json:"exp"`
 }
 
-func (c *Config) AccessToken(handle string) (tokenStr string, err error) {
-	exp := time.Now().Add(c.Expires)
+func (m *Multipass) AccessToken(handle string) (tokenStr string, err error) {
+	exp := time.Now().Add(m.Expires)
 	claims := &Claims{
 		Handle:    handle,
-		Resources: c.Resources,
+		Resources: m.Resources,
 		Expires:   exp.Unix(),
 	}
 	payload, err := json.Marshal(claims)
 	if err != nil {
 		return "", err
 	}
-	jws, err := c.signer.Sign(payload)
+	jws, err := m.signer.Sign(payload)
 	if err != nil {
 		return "", err
 	}
@@ -127,8 +127,8 @@ func (c *Config) AccessToken(handle string) (tokenStr string, err error) {
 	return jws.CompactSerialize()
 }
 
-func (c *Config) LoginURL(u url.URL, tokenStr string) url.URL {
-	u.Path = path.Join(c.Basepath, "login")
+func (m *Multipass) LoginURL(u url.URL, tokenStr string) url.URL {
+	u.Path = path.Join(m.Basepath, "login")
 	v := url.Values{}
 	v.Set("token", tokenStr)
 	u.RawQuery = v.Encode()
@@ -136,27 +136,27 @@ func (c *Config) LoginURL(u url.URL, tokenStr string) url.URL {
 	return u
 }
 
-func loginHandler(w http.ResponseWriter, r *http.Request, c *Config) (int, error) {
+func loginHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
 	if r.Method == "POST" {
 		r.ParseForm()
 		handle := r.PostForm.Get("handle")
 		if len(handle) == 0 {
-			loc := path.Join(c.Basepath, "login")
+			loc := path.Join(m.Basepath, "login")
 			http.Redirect(w, r, loc, http.StatusSeeOther)
 			return http.StatusSeeOther, nil
 		}
-		switch c.authorizer.IsAuthorized(handle) {
+		switch m.authorizer.IsAuthorized(handle) {
 		case true:
-			token, err := c.AccessToken(handle)
+			token, err := m.AccessToken(handle)
 			if err != nil {
 				log.Print(err)
 			}
-			siteURL, err := url.Parse(c.SiteAddr)
+			siteURL, err := url.Parse(m.SiteAddr)
 			if err != nil {
 				log.Fatal(err)
 			}
-			loginURL := c.LoginURL(*siteURL, token)
-			if err := c.sender.Send(handle, loginURL.String()); err != nil {
+			loginURL := m.LoginURL(*siteURL, token)
+			if err := m.sender.Send(handle, loginURL.String()); err != nil {
 				log.Print(err)
 			}
 		}
@@ -184,11 +184,11 @@ func loginHandler(w http.ResponseWriter, r *http.Request, c *Config) (int, error
 	return http.StatusMethodNotAllowed, nil
 }
 
-func loginformHandler(w http.ResponseWriter, r *http.Request, c *Config) (int, error) {
+func loginformHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(`
 <html><body>
-<form action="` + path.Join(c.Basepath, "/login") + `" method=POST>
+<form action="` + path.Join(m.Basepath, "/login") + `" method=POST>
 <input type=hidden name=url value="` + r.URL.String() + `"/>
 <input type=text name=handle />
 <input type=submit>
@@ -197,20 +197,20 @@ func loginformHandler(w http.ResponseWriter, r *http.Request, c *Config) (int, e
 	return http.StatusOK, nil
 }
 
-func signoutHandler(w http.ResponseWriter, r *http.Request, c *Config) (int, error) {
+func signoutHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
 	if cookie, err := r.Cookie("jwt_token"); err == nil {
 		cookie.Expires = time.Now().AddDate(-1, 0, 0)
 		cookie.MaxAge = -1
 		cookie.Path = "/"
 		http.SetCookie(w, cookie)
 	}
-	loc := path.Join(c.Basepath, "login")
+	loc := path.Join(m.Basepath, "login")
 	http.Redirect(w, r, loc, http.StatusSeeOther)
 	return http.StatusSeeOther, nil
 }
 
-func publickeyHandler(w http.ResponseWriter, r *http.Request, c *Config) (int, error) {
-	data, err := x509.MarshalPKIXPublicKey(&c.key.PublicKey)
+func publickeyHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
+	data, err := x509.MarshalPKIXPublicKey(&m.key.PublicKey)
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
@@ -225,18 +225,18 @@ func publickeyHandler(w http.ResponseWriter, r *http.Request, c *Config) (int, e
 	return http.StatusOK, nil
 }
 
-func tokenHandler(w http.ResponseWriter, r *http.Request, c *Config) (int, error) {
+func tokenHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
 	// Extract token from HTTP header, query parameter or cookie
 	tokenStr, err := extractToken(r)
 	if err != nil {
 		return http.StatusUnauthorized, ErrInvalidToken
 	}
 	var claims *Claims
-	if claims, err = validateToken(tokenStr, c.key.PublicKey); err != nil {
+	if claims, err = validateToken(tokenStr, m.key.PublicKey); err != nil {
 		return http.StatusUnauthorized, ErrInvalidToken
 	}
 	// Authorize handle claim
-	if ok := c.authorizer.IsAuthorized(claims.Handle); !ok {
+	if ok := m.authorizer.IsAuthorized(claims.Handle); !ok {
 		return http.StatusUnauthorized, ErrInvalidToken
 	}
 	// Verify path claim
@@ -254,9 +254,9 @@ func tokenHandler(w http.ResponseWriter, r *http.Request, c *Config) (int, error
 }
 
 func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
-	c := a.Config
+	m := a.Multipass
 	var pathMatch bool
-	for _, path := range c.Resources {
+	for _, path := range m.Resources {
 		if httpserver.Path(r.URL.Path).Matches(path) {
 			pathMatch = true
 			continue
@@ -267,16 +267,16 @@ func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 	}
 
 	switch r.URL.Path {
-	case path.Join(c.Basepath, "pub.cer"):
-		return publickeyHandler(w, r, c)
-	case path.Join(c.Basepath, "login"):
-		return loginHandler(w, r, c)
-	case path.Join(c.Basepath, "signout"):
-		return signoutHandler(w, r, c)
+	case path.Join(m.Basepath, "pub.cer"):
+		return publickeyHandler(w, r, m)
+	case path.Join(m.Basepath, "login"):
+		return loginHandler(w, r, m)
+	case path.Join(m.Basepath, "signout"):
+		return signoutHandler(w, r, m)
 	default:
-		if code, err := tokenHandler(w, r, c); err != nil {
+		if code, err := tokenHandler(w, r, m); err != nil {
 			w.WriteHeader(code)
-			return loginformHandler(w, r, c)
+			return loginformHandler(w, r, m)
 		}
 	}
 	return a.Next.ServeHTTP(w, r)

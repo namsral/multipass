@@ -34,17 +34,17 @@ func setup(c *caddy.Controller) error {
 		return errors.New("No directive declared")
 	}
 
-	config, err := ConfigFromRule(rules[0])
+	multipass, err := NewMultipassFromRule(rules[0])
 	if err != nil {
 		return err
 	}
 
 	cfg := httpserver.GetConfig(c)
-	config.SiteAddr = cfg.Addr.String()
+	multipass.SiteAddr = cfg.Addr.String()
 	mid := func(next httpserver.Handler) httpserver.Handler {
 		return &Auth{
-			Config: config,
-			Next:   next,
+			Multipass: multipass,
+			Next:      next,
 		}
 	}
 	cfg.AddMiddleware(mid)
