@@ -60,7 +60,7 @@ func NewMultipassFromRule(r Rule) (*Multipass, error) {
 		m.Resources = r.Resources
 	}
 	if len(r.Basepath) > 0 {
-		m.Basepath = r.Basepath
+		m.Basepath = path.Join("/", r.Basepath)
 	}
 	if r.Expires > 0 {
 		m.Expires = r.Expires
@@ -177,9 +177,9 @@ func loginHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 				log.Print(err)
 			}
 		}
-		w.Header().Add("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte("A login link has been sent to user with handle " + handle + " if your handle is authorized"))
-		return http.StatusOK, nil
+		location := path.Join(m.Basepath, "/login/confirm")
+		http.Redirect(w, r, location, http.StatusSeeOther)
+		return http.StatusSeeOther, nil
 	}
 	if r.Method == "GET" {
 		if tokenStr := r.URL.Query().Get("token"); len(tokenStr) > 0 {
@@ -197,31 +197,31 @@ func loginHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 			http.Redirect(w, r, nexturl, http.StatusSeeOther)
 			return http.StatusSeeOther, nil
 		}
-		w.Header().Add("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte("<html><body><form action=" + r.URL.Path + " method=POST><input type=text name=handle /><input type=submit></form></body></html>"))
-		return http.StatusOK, nil
-	}
-	return http.StatusMethodNotAllowed, nil
-}
-
-func loginformHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
-	nextURL, err := url.Parse(m.SiteAddr)
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-	nextURL.Path = r.URL.Path
-	nextURL.RawQuery = r.URL.RawQuery
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(`
+		nextURL, err := url.Parse(m.SiteAddr)
+		if err != nil {
+			return http.StatusInternalServerError, err
+		}
+		nextURL.Path = r.URL.Path
+		nextURL.RawQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(`
 <html><body>
 <h1>Multipass</h1>
-<p>Enter your user handle to gain access to ` + nextURL.String() + `</p>
+<p>This resource is protected by Multipass. Enter your user handle to gain access.</p>
 <form action="` + path.Join(m.Basepath, "/login") + `" method=POST>
 <input type=hidden name=url value="` + nextURL.String() + `"/>
 <input type=text name=handle />
 <input type=submit>
 </form></body></html>
 `))
+		return http.StatusOK, nil
+	}
+	return http.StatusMethodNotAllowed, nil
+}
+
+func confirmHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
+	w.Header().Add("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte("A login link has been sent to you"))
 	return http.StatusOK, nil
 }
 
@@ -289,6 +289,8 @@ func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 		return publickeyHandler(w, r, m)
 	case path.Join(m.Basepath, "login"):
 		return loginHandler(w, r, m)
+	case path.Join(m.Basepath, "login/confirm"):
+		return confirmHandler(w, r, m)
 	case path.Join(m.Basepath, "signout"):
 		return signoutHandler(w, r, m)
 	}
@@ -297,7 +299,7 @@ func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 		if httpserver.Path(r.URL.Path).Matches(path) {
 			if code, err := tokenHandler(w, r, m); err != nil {
 				w.WriteHeader(code)
-				return loginformHandler(w, r, m)
+				return loginHandler(w, r, m)
 			}
 		}
 	}
