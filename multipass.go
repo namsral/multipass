@@ -283,16 +283,6 @@ func tokenHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 
 func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 	m := a.Multipass
-	var pathMatch bool
-	for _, path := range m.Resources {
-		if httpserver.Path(r.URL.Path).Matches(path) {
-			pathMatch = true
-			continue
-		}
-	}
-	if !pathMatch {
-		return a.Next.ServeHTTP(w, r)
-	}
 
 	switch r.URL.Path {
 	case path.Join(m.Basepath, "pub.cer"):
@@ -301,12 +291,17 @@ func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 		return loginHandler(w, r, m)
 	case path.Join(m.Basepath, "signout"):
 		return signoutHandler(w, r, m)
-	default:
-		if code, err := tokenHandler(w, r, m); err != nil {
-			w.WriteHeader(code)
-			return loginformHandler(w, r, m)
+	}
+
+	for _, path := range m.Resources {
+		if httpserver.Path(r.URL.Path).Matches(path) {
+			if code, err := tokenHandler(w, r, m); err != nil {
+				w.WriteHeader(code)
+				return loginformHandler(w, r, m)
+			}
 		}
 	}
+
 	return a.Next.ServeHTTP(w, r)
 }
 

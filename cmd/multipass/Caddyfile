@@ -2,12 +2,12 @@ localhost:2015 {
 	bind 127.0.0.1
 	tls off
 	multipass {
-		path /
+		resources /private
 		basepath /multipass
 		handles leeloo@dallas korben@dallas
 		mail_from "Multipass <no-reply@dallas>"
 		smtp_addr localhost:2525
 	}
-	proxy / localhost:9821
+	proxy / localhost:8912
 	log stdout
 }
