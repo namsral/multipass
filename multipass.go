@@ -226,15 +226,18 @@ func confirmHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, 
 }
 
 func signoutHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
-	if cookie, err := r.Cookie("jwt_token"); err == nil {
-		cookie.Expires = time.Now().AddDate(-1, 0, 0)
-		cookie.MaxAge = -1
-		cookie.Path = "/"
-		http.SetCookie(w, cookie)
+	if r.Method == "POST" {
+		if cookie, err := r.Cookie("jwt_token"); err == nil {
+			cookie.Expires = time.Now().AddDate(-1, 0, 0)
+			cookie.MaxAge = -1
+			cookie.Path = "/"
+			http.SetCookie(w, cookie)
+		}
+		loc := path.Join(m.Basepath, "login")
+		http.Redirect(w, r, loc, http.StatusSeeOther)
+		return http.StatusSeeOther, nil
 	}
-	loc := path.Join(m.Basepath, "login")
-	http.Redirect(w, r, loc, http.StatusSeeOther)
-	return http.StatusSeeOther, nil
+	return http.StatusMethodNotAllowed, nil
 }
 
 func publickeyHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
