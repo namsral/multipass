@@ -284,15 +284,19 @@ func tokenHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 	m := a.Multipass
 
-	switch r.URL.Path {
-	case path.Join(m.Basepath, "pub.cer"):
-		return publickeyHandler(w, r, m)
-	case path.Join(m.Basepath, "login"):
-		return loginHandler(w, r, m)
-	case path.Join(m.Basepath, "login/confirm"):
-		return confirmHandler(w, r, m)
-	case path.Join(m.Basepath, "signout"):
-		return signoutHandler(w, r, m)
+	if httpserver.Path(r.URL.Path).Matches(m.Basepath) {
+		switch r.URL.Path {
+		case path.Join(m.Basepath, "pub.cer"):
+			return publickeyHandler(w, r, m)
+		case path.Join(m.Basepath, "login"):
+			return loginHandler(w, r, m)
+		case path.Join(m.Basepath, "login/confirm"):
+			return confirmHandler(w, r, m)
+		case path.Join(m.Basepath, "signout"):
+			return signoutHandler(w, r, m)
+		default:
+			return http.StatusNotFound, nil
+		}
 	}
 
 	for _, path := range m.Resources {
