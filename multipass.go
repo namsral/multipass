@@ -301,8 +301,7 @@ func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 
 	for _, path := range m.Resources {
 		if httpserver.Path(r.URL.Path).Matches(path) {
-			if code, err := tokenHandler(w, r, m); err != nil {
-				w.WriteHeader(code)
+			if _, err := tokenHandler(w, r, m); err != nil {
 				return loginHandler(w, r, m)
 			}
 		}
