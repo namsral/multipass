@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	"html/template"
 	"log"
 	"net"
 	"net/http"
@@ -49,6 +50,7 @@ type Multipass struct {
 	Handler HandleService
 	signer  jose.Signer
 	key     *rsa.PrivateKey
+	tmpl    *template.Template
 }
 
 func NewMultipassFromRule(r Rule) (*Multipass, error) {
@@ -92,6 +94,12 @@ func NewMultipassFromRule(r Rule) (*Multipass, error) {
 		handler.Register(handle)
 	}
 	m.Handler = handler
+
+	tmpl, err := loadTemplates()
+	if err != nil {
+		return nil, err
+	}
+	m.tmpl = tmpl
 
 	return m, nil
 }
@@ -155,29 +163,35 @@ func loginHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 	if r.Method == "POST" {
 		r.ParseForm()
 		handle := r.PostForm.Get("handle")
-		if len(handle) == 0 {
-			loc := path.Join(m.Basepath, "login")
-			http.Redirect(w, r, loc, http.StatusSeeOther)
+		if len(handle) > 0 {
+			if m.Handler.Listed(handle) {
+				token, err := m.AccessToken(handle)
+				if err != nil {
+					log.Print(err)
+				}
+				values := url.Values{}
+				if s := r.PostForm.Get("url"); len(s) > 0 {
+					values.Set("url", s)
+				}
+				loginURL, err := NewLoginURL(m.SiteAddr, m.Basepath, token, values)
+				if err != nil {
+					log.Print(err)
+				}
+				if err := m.Handler.Notify(handle, loginURL.String()); err != nil {
+					log.Print(err)
+				}
+			}
+			// Redirect even when the handle is not listed to prevent guessing
+			location := path.Join(m.Basepath, "login/confirm")
+			http.Redirect(w, r, location, http.StatusSeeOther)
 			return http.StatusSeeOther, nil
 		}
-		if m.Handler.Listed(handle) {
-			token, err := m.AccessToken(handle)
-			if err != nil {
-				log.Print(err)
-			}
-			values := url.Values{}
-			if s := r.PostForm.Get("url"); len(s) > 0 {
-				values.Set("url", s)
-			}
-			loginURL, err := NewLoginURL(m.SiteAddr, m.Basepath, token, values)
-			if err != nil {
-				log.Print(err)
-			}
-			if err := m.Handler.Notify(handle, loginURL.String()); err != nil {
-				log.Print(err)
-			}
+		var location string
+		if s := r.PostForm.Get("url"); len(s) > 0 {
+			location = s
+		} else {
+			location = path.Join(m.Basepath, "login")
 		}
-		location := path.Join(m.Basepath, "/login/confirm")
 		http.Redirect(w, r, location, http.StatusSeeOther)
 		return http.StatusSeeOther, nil
 	}
@@ -189,31 +203,25 @@ func loginHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 				Path:  "/",
 			}
 			http.SetCookie(w, cookie)
-
-			nexturl := m.SiteAddr
-			if s := r.URL.Query().Get("url"); len(s) > 0 {
-				nexturl = s
+			nexturl := r.URL.Query().Get("url")
+			if len(nexturl) == 0 || httpserver.Path(nexturl).Matches(m.Basepath) {
+				nexturl = m.SiteAddr
 			}
-			http.Redirect(w, r, nexturl, http.StatusSeeOther)
-			return http.StatusSeeOther, nil
+			p := &page{
+				Page:        continueOrSignoutPage,
+				SignoutPath: path.Join(m.Basepath, "signout"),
+				NextURL:     nexturl,
+			}
+			m.tmpl.ExecuteTemplate(w, "page", p)
+			return http.StatusOK, nil
 		}
-		nextURL, err := url.Parse(m.SiteAddr)
-		if err != nil {
-			return http.StatusInternalServerError, err
+		p := &page{
+			Page:        loginPage,
+			LoginPath:   path.Join(m.Basepath, "login"),
+			NextURL:     r.URL.String(),
+			SignoutPath: path.Join(m.Basepath, "signout"),
 		}
-		nextURL.Path = r.URL.Path
-		nextURL.RawQuery = r.URL.RawQuery
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(`
-<html><body>
-<h1>Multipass</h1>
-<p>This resource is protected by Multipass. Enter your user handle to gain access.</p>
-<form action="` + path.Join(m.Basepath, "/login") + `" method=POST>
-<input type=hidden name=url value="` + nextURL.String() + `"/>
-<input type=text name=handle />
-<input type=submit>
-</form></body></html>
-`))
+		m.tmpl.ExecuteTemplate(w, "page", p)
 		return http.StatusOK, nil
 	}
 	return http.StatusMethodNotAllowed, nil
@@ -221,7 +229,10 @@ func loginHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 
 func confirmHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
 	w.Header().Add("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte("A login link has been sent to you"))
+	p := &page{
+		Page: tokenSentPage,
+	}
+	m.tmpl.ExecuteTemplate(w, "page", p)
 	return http.StatusOK, nil
 }
 
