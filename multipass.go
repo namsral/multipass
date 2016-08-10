@@ -48,6 +48,7 @@ type Multipass struct {
 	signer  jose.Signer
 	key     *rsa.PrivateKey
 	tmpl    *template.Template
+	mux     *http.ServeMux
 }
 
 func NewMultipassFromRule(r Rule) (*Multipass, error) {
@@ -81,6 +82,14 @@ func NewMultipassFromRule(r Rule) (*Multipass, error) {
 		handler.Register(handle)
 	}
 	m.Handler = handler
+
+	mux := http.NewServeMux()
+	mux.HandleFunc(path.Join(m.Basepath, "/"), m.rootHandler)
+	mux.HandleFunc(path.Join(m.Basepath, "/login"), m.loginHandler)
+	mux.HandleFunc(path.Join(m.Basepath, "/confirm"), m.confirmHandler)
+	mux.HandleFunc(path.Join(m.Basepath, "/signout"), m.signoutHandler)
+	mux.HandleFunc(path.Join(m.Basepath, "/pub.cer"), m.publickeyHandler)
+	m.mux = mux
 
 	tmpl, err := loadTemplates()
 	if err != nil {
@@ -116,6 +125,160 @@ type Claims struct {
 	Expires   int64    `json:"exp"`
 }
 
+// ServeHTTP satisfies the ServeHTTP interface
+func (m *Multipass) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if h, p := m.mux.Handler(r); len(p) > 0 {
+		h.ServeHTTP(w, r)
+		return
+	}
+	http.NotFound(w, r)
+}
+
+// rootHandler handles the "/" path of the Multipass handler.
+// Shows login page when no JWT present
+// Show continue or signout page when JWT is valid
+// Show token invalid page when JWT is invalid
+func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "GET" {
+
+		// Regular login page
+		p := &page{
+			Page:        loginPage,
+			LoginPath:   path.Join(m.Basepath, "login"),
+			SignoutPath: path.Join(m.Basepath, "signout"),
+		}
+
+		// Show login page when there is no token
+		tokenStr, err := extractToken(r)
+		if err != nil {
+			if s := r.Referer(); !httpserver.Path(s).Matches(m.Basepath) {
+				p.NextURL = s
+			}
+			m.tmpl.ExecuteTemplate(w, "page", p)
+			return
+		}
+		var claims *Claims
+		if claims, err = validateToken(tokenStr, m.key.PublicKey); err != nil {
+			p.Page = tokenInvalidPage
+			m.tmpl.ExecuteTemplate(w, "page", p)
+			return
+		}
+		// Authorize handle claim
+		if ok := m.Handler.Listed(claims.Handle); !ok {
+			p.Page = tokenInvalidPage
+			m.tmpl.ExecuteTemplate(w, "page", p)
+			return
+		}
+		if cookie, err := r.Cookie("next_url"); err == nil {
+			p.NextURL = cookie.Value
+		}
+		p.Page = continueOrSignoutPage
+		m.tmpl.ExecuteTemplate(w, "page", p)
+		return
+	}
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+func (m *Multipass) loginHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "GET" {
+		if tokenStr := r.URL.Query().Get("token"); len(tokenStr) > 0 {
+			cookie := &http.Cookie{
+				Name:  "jwt_token",
+				Value: tokenStr,
+				Path:  "/",
+			}
+			http.SetCookie(w, cookie)
+		}
+		if nexturl := r.URL.Query().Get("url"); len(nexturl) > 0 {
+			cookie := &http.Cookie{
+				Name:  "next_url",
+				Value: nexturl,
+				Path:  "/",
+			}
+			http.SetCookie(w, cookie)
+		}
+		http.Redirect(w, r, m.Basepath, http.StatusSeeOther)
+		return
+	}
+	if r.Method == "POST" {
+		r.ParseForm()
+		handle := r.PostForm.Get("handle")
+		if len(handle) > 0 {
+			if m.Handler.Listed(handle) {
+				token, err := m.AccessToken(handle)
+				if err != nil {
+					log.Print(err)
+				}
+				values := url.Values{}
+				if s := r.PostForm.Get("url"); len(s) > 0 {
+					values.Set("url", s)
+				}
+				loginURL, err := NewLoginURL(m.SiteAddr, m.Basepath, token, values)
+				if err != nil {
+					log.Print(err)
+				}
+				if err := m.Handler.Notify(handle, loginURL.String()); err != nil {
+					log.Print(err)
+				}
+			}
+			// Redirect even when the handle is not listed in order to prevent guessing
+			location := path.Join(m.Basepath, "confirm")
+			http.Redirect(w, r, location, http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, m.Basepath, http.StatusSeeOther)
+		return
+	}
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+func (m *Multipass) confirmHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "GET" {
+		w.Header().Add("Content-Type", "text/html; charset=utf-8")
+		p := &page{
+			Page: tokenSentPage,
+		}
+		m.tmpl.ExecuteTemplate(w, "page", p)
+		return
+	}
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+// signoutHandler deletes the jwt_token cookie and redirect to the login
+// location.
+func (m *Multipass) signoutHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "POST" {
+		if cookie, err := r.Cookie("jwt_token"); err == nil {
+			cookie.Expires = time.Now().AddDate(-1, 0, 0)
+			cookie.MaxAge = -1
+			cookie.Path = "/"
+			http.SetCookie(w, cookie)
+		}
+		http.Redirect(w, r, m.Basepath, http.StatusSeeOther)
+		return
+	}
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+// publickeyHandler writes the public key to the given ResponseWriter to allow
+// other to validate Multipass signed tokens.
+func (m *Multipass) publickeyHandler(w http.ResponseWriter, r *http.Request) {
+	data, err := x509.MarshalPKIXPublicKey(&m.key.PublicKey)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	block := &pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: data,
+	}
+	w.Header().Set("Content-Type", "application/pkix-cert")
+	if err := pem.Encode(w, block); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+}
+
 func (m *Multipass) AccessToken(handle string) (tokenStr string, err error) {
 	exp := time.Now().Add(m.Expires)
 	claims := &Claims{
@@ -144,114 +307,6 @@ func NewLoginURL(siteaddr, basepath, token string, v url.Values) (*url.URL, erro
 	v.Set("token", token)
 	u.RawQuery = v.Encode()
 	return u, nil
-}
-
-func loginHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
-	if r.Method == "POST" {
-		r.ParseForm()
-		handle := r.PostForm.Get("handle")
-		if len(handle) > 0 {
-			if m.Handler.Listed(handle) {
-				token, err := m.AccessToken(handle)
-				if err != nil {
-					log.Print(err)
-				}
-				values := url.Values{}
-				if s := r.PostForm.Get("url"); len(s) > 0 {
-					values.Set("url", s)
-				}
-				loginURL, err := NewLoginURL(m.SiteAddr, m.Basepath, token, values)
-				if err != nil {
-					log.Print(err)
-				}
-				if err := m.Handler.Notify(handle, loginURL.String()); err != nil {
-					log.Print(err)
-				}
-			}
-			// Redirect even when the handle is not listed to prevent guessing
-			location := path.Join(m.Basepath, "login/confirm")
-			http.Redirect(w, r, location, http.StatusSeeOther)
-			return http.StatusSeeOther, nil
-		}
-		var location string
-		if s := r.PostForm.Get("url"); len(s) > 0 {
-			location = s
-		} else {
-			location = path.Join(m.Basepath, "login")
-		}
-		http.Redirect(w, r, location, http.StatusSeeOther)
-		return http.StatusSeeOther, nil
-	}
-	if r.Method == "GET" {
-		if tokenStr := r.URL.Query().Get("token"); len(tokenStr) > 0 {
-			cookie := &http.Cookie{
-				Name:  "jwt_token",
-				Value: tokenStr,
-				Path:  "/",
-			}
-			http.SetCookie(w, cookie)
-			nexturl := r.URL.Query().Get("url")
-			if len(nexturl) == 0 || httpserver.Path(nexturl).Matches(m.Basepath) {
-				nexturl = m.SiteAddr
-			}
-			p := &page{
-				Page:        continueOrSignoutPage,
-				SignoutPath: path.Join(m.Basepath, "signout"),
-				NextURL:     nexturl,
-			}
-			m.tmpl.ExecuteTemplate(w, "page", p)
-			return http.StatusOK, nil
-		}
-		p := &page{
-			Page:        loginPage,
-			LoginPath:   path.Join(m.Basepath, "login"),
-			NextURL:     r.URL.String(),
-			SignoutPath: path.Join(m.Basepath, "signout"),
-		}
-		m.tmpl.ExecuteTemplate(w, "page", p)
-		return http.StatusOK, nil
-	}
-	return http.StatusMethodNotAllowed, nil
-}
-
-func confirmHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
-	w.Header().Add("Content-Type", "text/html; charset=utf-8")
-	p := &page{
-		Page: tokenSentPage,
-	}
-	m.tmpl.ExecuteTemplate(w, "page", p)
-	return http.StatusOK, nil
-}
-
-func signoutHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
-	if r.Method == "POST" {
-		if cookie, err := r.Cookie("jwt_token"); err == nil {
-			cookie.Expires = time.Now().AddDate(-1, 0, 0)
-			cookie.MaxAge = -1
-			cookie.Path = "/"
-			http.SetCookie(w, cookie)
-		}
-		loc := path.Join(m.Basepath, "login")
-		http.Redirect(w, r, loc, http.StatusSeeOther)
-		return http.StatusSeeOther, nil
-	}
-	return http.StatusMethodNotAllowed, nil
-}
-
-func publickeyHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
-	data, err := x509.MarshalPKIXPublicKey(&m.key.PublicKey)
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-	block := &pem.Block{
-		Type:  "PUBLIC KEY",
-		Bytes: data,
-	}
-	w.Header().Set("Content-Type", "application/pkix-cert")
-	if err := pem.Encode(w, block); err != nil {
-		return http.StatusInternalServerError, err
-	}
-	return http.StatusOK, nil
 }
 
 func tokenHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
@@ -285,28 +340,21 @@ func tokenHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 	return http.StatusOK, nil
 }
 
+// ServeHTTP implements the httpserver.ServeHTTP interface from caddy.
 func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 	m := a.Multipass
 
 	if httpserver.Path(r.URL.Path).Matches(m.Basepath) {
-		switch r.URL.Path {
-		case path.Join(m.Basepath, "pub.cer"):
-			return publickeyHandler(w, r, m)
-		case path.Join(m.Basepath, "login"):
-			return loginHandler(w, r, m)
-		case path.Join(m.Basepath, "login/confirm"):
-			return confirmHandler(w, r, m)
-		case path.Join(m.Basepath, "signout"):
-			return signoutHandler(w, r, m)
-		default:
-			return http.StatusNotFound, nil
-		}
+		m.ServeHTTP(w, r)
+		return 0, nil
 	}
 
 	for _, path := range m.Resources {
 		if httpserver.Path(r.URL.Path).Matches(path) {
 			if _, err := tokenHandler(w, r, m); err != nil {
-				return loginHandler(w, r, m)
+				r.Header.Set("Referer", r.URL.String())
+				m.rootHandler(w, r)
+				return 0, nil
 			}
 		}
 	}
