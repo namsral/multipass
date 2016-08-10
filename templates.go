@@ -125,6 +125,7 @@ body {
 .btn {
 	font-family: sans-serif;
 	font-size: 1.2rem;
+	line-height: 2rem;
 	margin: 1rem 0;
 	padding: .5rem 1rem;
 	width: 100%;
