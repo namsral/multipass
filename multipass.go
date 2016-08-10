@@ -111,7 +111,7 @@ func NewMultipass() (*Multipass, error) {
 	}
 	return &Multipass{
 		Resources: []string{"/"},
-		Basepath:  "/",
+		Basepath:  "/multipass",
 		Expires:   time.Hour * 24,
 		key:       pk,
 		signer:    signer,
