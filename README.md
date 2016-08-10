@@ -53,6 +53,39 @@ example.com {
 - __mail_from__: From address used in email messages sent to users. _Required_
 
 
+__Build__
+
+
+1. Get the Caddy web server source code
+
+```sh
+$ go get github.com/mholt/caddy
+```
+
+2. Register Multipass as a caddy plugin by adding multipass to the caddy directive.
+
+	Open `$GOPATH/src/github.com/mholt/caddy/caddyhttp/httpserver/plugin.go` in your favorite editor
+
+```go
+var directives = []string{
+	...
+ 	"expvar",
+	"multipass", // <- insert this line somewhere before "proxy"
+	"proxy",
+	...
+}
+```
+
+3. Get the Multipass source code and build the command:
+
+```sh
+$ go ithub.com/namsral/multipass
+$ go install github.com/namsral/multipass/cmd/multipass
+```
+
+The next thing is to create a configuration file and run the multipass command.
+
+
 __JWT__
 
 User access tokens are signed [JSON Web Tokens][jwt] which are passed on as login links and stored as cookies to support single sign-on.
