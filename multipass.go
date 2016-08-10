@@ -292,6 +292,9 @@ func tokenHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 	if !match {
 		return http.StatusUnauthorized, ErrInvalidToken
 	}
+
+	// Pass on authorized handle to downstream handlers
+	r.Header.Set("Multipass-Handle", claims.Handle)
 	return http.StatusOK, nil
 }
 
