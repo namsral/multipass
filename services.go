@@ -2,8 +2,10 @@ package multipass
 
 import (
 	"bytes"
+	"errors"
 	"html/template"
 	"net/smtp"
+	"regexp"
 	"sync"
 	"time"
 )
@@ -27,21 +29,39 @@ Best,
 Multipass Bot
 `
 
-// HandleService implements the handle service
+// Validation error(s)
+var (
+	ErrNotEmail = errors.New(`expecting a valid email address ^[^@\s]+@[^@\s]+$`)
+)
+
+// Validation rule(s)
+var (
+	RuleEmail = regexp.MustCompile(`^[^@\s]+@[^@\s]+$`)
+)
+
+// A HandleService interface is used by a Multipass instance to verify
+// listed user handles and send the users a login URL when they request an
+// access token.
 type HandleService interface {
-	// Register returns nil when the given user handle is accepted for
-	// registration with the service
+	// Register returns nil when the given handle is accepted for
+	// registration with the service.
+	// The handle is passed on by the Multipass instance and can represent
+	// an user handle, an email address or even a handle representing a URI to
+	// a datastore. The latter allows the HandleService to be associated
+	// with a RDBMS.
 	Register(handle string) error
 
-	// Listed return true when the given user handle is listed with the
-	// service
+	// Listed returns true when the given handle is listed with the
+	// service.
 	Listed(handle string) bool
 
-	// Notify return nul when the the given login link is succesfully
-	// communicated to the given user handle
+	// Notify returns nil when the given login URL is succesfully
+	// communicated to the given handle.
 	Notify(handle, loginurl string) error
 }
 
+// EmailHandler implements the HandleService interface. Handles are interperted
+// as email addresses.
 type EmailHandler struct {
 	auth     smtp.Auth
 	addr     string
@@ -52,6 +72,7 @@ type EmailHandler struct {
 	list []string
 }
 
+// NewEmailHandler return a new EmailHandler instance with the given options.
 func NewEmailHandler(addr string, auth smtp.Auth, from, msgTmpl string) *EmailHandler {
 	t := template.Must(template.New("email").Parse(msgTmpl))
 	return &EmailHandler{
@@ -62,17 +83,22 @@ func NewEmailHandler(addr string, auth smtp.Auth, from, msgTmpl string) *EmailHa
 	}
 }
 
-func (s *EmailHandler) Register(handle string) error {
+// Register returns nil when the given email address is valid.
+func (s *EmailHandler) Register(email string) error {
+	if RuleEmail.MatchString(handle) == false {
+		return ErrNotEmail
+	}
 	s.lock.Lock()
 	s.list = append(s.list, handle)
 	s.lock.Unlock()
 	return nil
 }
 
-func (s *EmailHandler) Listed(handle string) bool {
+// Listed return true when the given email address is listed.
+func (s *EmailHandler) Listed(email string) bool {
 	s.lock.Lock()
 	for _, e := range s.list {
-		if e == handle {
+		if e == email {
 			s.lock.Unlock()
 			return true
 		}
@@ -81,7 +107,12 @@ func (s *EmailHandler) Listed(handle string) bool {
 	return false
 }
 
-func (s *EmailHandler) Notify(handle, loginurl string) error {
+// Notify returns nil when the given login URL is succesfully sent to the given
+// email address.
+func (s *EmailHandler) Notify(email, loginurl string) error {
+	if RuleEmail.MatchString(handle) == false {
+		return ErrNotEmail
+	}
 	var msg bytes.Buffer
 	data := struct {
 		From, Date, To, LoginURL string
