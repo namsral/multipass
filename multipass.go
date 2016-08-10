@@ -21,13 +21,18 @@ import (
 	jose "gopkg.in/square/go-jose.v1"
 )
 
-var ErrInvalidToken = errors.New("invalid token")
+// Portable errors
+var (
+	ErrInvalidToken = errors.New("invalid token")
+)
 
+// Auth wraps a Multipass instance to be used by the caddy web server.
 type Auth struct {
 	*Multipass
 	Next httpserver.Handler
 }
 
+// Rule holds the directive options parsed from a Caddyfile.
 type Rule struct {
 	Basepath  string
 	Expires   time.Duration
@@ -38,6 +43,8 @@ type Rule struct {
 	MailFrom, MailTmpl           string
 }
 
+// Multipass implements the http.Handler interface which can handle
+// authentication and authorization of users and resources using signed JWT.
 type Multipass struct {
 	Resources []string
 	Basepath  string
@@ -51,6 +58,8 @@ type Multipass struct {
 	mux     *http.ServeMux
 }
 
+// NewMultipassFromRule return a new instance of Multipass from the given Rule.
+// Returned error will most likely be parser errors.
 func NewMultipassFromRule(r Rule) (*Multipass, error) {
 	m, err := NewMultipass()
 	if err != nil {
@@ -100,6 +109,9 @@ func NewMultipassFromRule(r Rule) (*Multipass, error) {
 	return m, nil
 }
 
+// NewMultipass returns a new instance of Multipass with reasonalble defaults
+// like a 2048 bit RSA key pair, /multipass as basepath, 24 hours before a
+// token will expire.
 func NewMultipass() (*Multipass, error) {
 	pk, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -279,6 +291,8 @@ func (m *Multipass) publickeyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// AccessToken returns a new signed and serialized token with the given handle
+// as a claim.
 func (m *Multipass) AccessToken(handle string) (tokenStr string, err error) {
 	exp := time.Now().Add(m.Expires)
 	claims := &Claims{
@@ -298,6 +312,8 @@ func (m *Multipass) AccessToken(handle string) (tokenStr string, err error) {
 	return jws.CompactSerialize()
 }
 
+// NewLoginURL returns a login url which can be used as a time limited login.
+// Optional values will be encoded in the login URL.
 func NewLoginURL(siteaddr, basepath, token string, v url.Values) (*url.URL, error) {
 	u, err := url.Parse(siteaddr)
 	if err != nil {
