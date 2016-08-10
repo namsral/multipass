@@ -85,11 +85,11 @@ func NewEmailHandler(addr string, auth smtp.Auth, from, msgTmpl string) *EmailHa
 
 // Register returns nil when the given email address is valid.
 func (s *EmailHandler) Register(email string) error {
-	if RuleEmail.MatchString(handle) == false {
+	if RuleEmail.MatchString(email) == false {
 		return ErrNotEmail
 	}
 	s.lock.Lock()
-	s.list = append(s.list, handle)
+	s.list = append(s.list, email)
 	s.lock.Unlock()
 	return nil
 }
@@ -110,7 +110,7 @@ func (s *EmailHandler) Listed(email string) bool {
 // Notify returns nil when the given login URL is succesfully sent to the given
 // email address.
 func (s *EmailHandler) Notify(email, loginurl string) error {
-	if RuleEmail.MatchString(handle) == false {
+	if RuleEmail.MatchString(email) == false {
 		return ErrNotEmail
 	}
 	var msg bytes.Buffer
@@ -119,11 +119,11 @@ func (s *EmailHandler) Notify(email, loginurl string) error {
 	}{
 		From:     s.from,
 		Date:     time.Now().Format(time.RFC1123Z),
-		To:       handle,
+		To:       email,
 		LoginURL: loginurl,
 	}
 	if err := s.template.ExecuteTemplate(&msg, "email", data); err != nil {
 		return err
 	}
-	return smtp.SendMail(s.addr, s.auth, s.from, []string{handle}, msg.Bytes())
+	return smtp.SendMail(s.addr, s.auth, s.from, []string{email}, msg.Bytes())
 }
