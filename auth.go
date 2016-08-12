@@ -49,7 +49,24 @@ type Rule struct {
 // NewMultipassFromRule return a new instance of Multipass from the given Rule.
 // Returned error will most likely be parser errors.
 func NewMultipassFromRule(r Rule) (*Multipass, error) {
-	m, err := NewMultipass(r.Basepath)
+	// Create a HandleService
+	opt := &EmailHandleOptions{
+		r.SMTPAddr,
+		r.SMTPUser,
+		r.SMTPPass,
+		r.MailFrom,
+	}
+	service, err := NewEmailHandler(opt)
+	if err != nil {
+		return nil, err
+	}
+	for _, handle := range r.Handles {
+		service.Register(handle)
+	}
+
+	// Create a new Multipass service with
+	// the given basepath and handle service
+	m, err := NewMultipass(r.Basepath, service)
 	if err != nil {
 		return nil, err
 	}
@@ -60,22 +77,5 @@ func NewMultipassFromRule(r Rule) (*Multipass, error) {
 	if r.Expires > 0 {
 		m.Expires = r.Expires
 	}
-
-	// Set EmailHandler options
-	opt := &EmailOptions{
-		r.SMTPAddr,
-		r.SMTPUser,
-		r.SMTPPass,
-		r.MailFrom,
-	}
-	handler, err := NewEmailHandler(opt)
-	if err != nil {
-		return nil, err
-	}
-	for _, handle := range r.Handles {
-		handler.Register(handle)
-	}
-	m.Handler = handler
-
 	return m, nil
 }

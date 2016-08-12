@@ -32,17 +32,18 @@ type Multipass struct {
 	SiteAddr  string
 	Expires   time.Duration
 
-	Handler HandleService
-	signer  jose.Signer
-	key     *rsa.PrivateKey
-	tmpl    *template.Template
-	mux     *http.ServeMux
+	HandleService
+
+	signer jose.Signer
+	key    *rsa.PrivateKey
+	tmpl   *template.Template
+	mux    *http.ServeMux
 }
 
 // NewMultipass returns a new instance of Multipass with reasonalble defaults
 // like a 2048 bit RSA key pair, /multipass as basepath, 24 hours before a
 // token will expire.
-func NewMultipass(basepath string) (*Multipass, error) {
+func NewMultipass(basepath string, service HandleService) (*Multipass, error) {
 	// Absolute the given basepath or set a default
 	if len(basepath) > 0 {
 		basepath = path.Join("/", basepath)
@@ -67,12 +68,13 @@ func NewMultipass(basepath string) (*Multipass, error) {
 	}
 
 	m := &Multipass{
-		Resources: []string{"/"},
-		Basepath:  basepath,
-		Expires:   time.Hour * 24,
-		key:       pk,
-		signer:    signer,
-		tmpl:      tmpl,
+		Resources:     []string{"/"},
+		Basepath:      basepath,
+		Expires:       time.Hour * 24,
+		HandleService: service,
+		signer:        signer,
+		key:           pk,
+		tmpl:          tmpl,
 	}
 
 	// Create the router
@@ -136,7 +138,7 @@ func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Authorize handle claim
-		if ok := m.Handler.Listed(claims.Handle); !ok {
+		if ok := m.HandleService.Listed(claims.Handle); !ok {
 			p.Page = tokenInvalidPage
 			m.tmpl.ExecuteTemplate(w, "page", p)
 			return
@@ -176,7 +178,7 @@ func (m *Multipass) loginHandler(w http.ResponseWriter, r *http.Request) {
 		r.ParseForm()
 		handle := r.PostForm.Get("handle")
 		if len(handle) > 0 {
-			if m.Handler.Listed(handle) {
+			if m.HandleService.Listed(handle) {
 				token, err := m.AccessToken(handle)
 				if err != nil {
 					log.Print(err)
@@ -189,7 +191,7 @@ func (m *Multipass) loginHandler(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					log.Print(err)
 				}
-				if err := m.Handler.Notify(handle, loginURL.String()); err != nil {
+				if err := m.HandleService.Notify(handle, loginURL.String()); err != nil {
 					log.Print(err)
 				}
 			}
@@ -296,7 +298,7 @@ func tokenHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 		return http.StatusUnauthorized, ErrInvalidToken
 	}
 	// Authorize handle claim
-	if ok := m.Handler.Listed(claims.Handle); !ok {
+	if ok := m.HandleService.Listed(claims.Handle); !ok {
 		return http.StatusUnauthorized, ErrInvalidToken
 	}
 	// Verify path claim

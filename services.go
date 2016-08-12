@@ -29,16 +29,16 @@ Best,
 Multipass Bot
 `
 
-// A HandleService interface is used by a Multipass instance to verify
-// listed user handles and send the users a login URL when they request an
-// access token.
+// A HandleService is an interface used by a Multipass instance to register,
+// list user handles and notify users about requested access tokens.
+// A handle is a unique user identifier, e.g. email address.
 type HandleService interface {
 	// Register returns nil when the given handle is accepted for
 	// registration with the service.
 	// The handle is passed on by the Multipass instance and can represent
-	// an user handle, an email address or even a handle representing a URI to
+	// an username, email address or even an URI representing a connection to
 	// a datastore. The latter allows the HandleService to be associated
-	// with a RDBMS.
+	// with a RDBMS from which to verify listed users.
 	Register(handle string) error
 
 	// Listed returns true when the given handle is listed with the
@@ -50,9 +50,9 @@ type HandleService interface {
 	Notify(handle, loginurl string) error
 }
 
-// EmailHandler implements the HandleService interface. Handles are interperted
+// EmailHandleService implements the HandleService interface. Handles are interperted
 // as email addresses.
-type EmailHandler struct {
+type EmailHandleService struct {
 	auth     smtp.Auth
 	addr     string
 	from     *mail.Address
@@ -62,14 +62,14 @@ type EmailHandler struct {
 	list []string
 }
 
-// EmailOptions is used to construct a new EmailHandler using the
+// EmailHandleOptions is used to construct a new EmailHandler using the
 // NewEmailHandler function.
-type EmailOptions struct {
+type EmailHandleOptions struct {
 	Addr, Username, Password, FromAddr string
 }
 
 // NewEmailHandler returns a new EmailHandler instance with the given options.
-func NewEmailHandler(opt *EmailOptions) (*EmailHandler, error) {
+func NewEmailHandler(opt *EmailHandleOptions) (*EmailHandleService, error) {
 	host := "localhost"
 	port := "25"
 	if len(opt.Addr) > 0 {
@@ -93,7 +93,7 @@ func NewEmailHandler(opt *EmailOptions) (*EmailHandler, error) {
 
 	t := template.Must(template.New("email").Parse(emailTemplate))
 
-	return &EmailHandler{
+	return &EmailHandleService{
 		addr:     addr,
 		auth:     auth,
 		from:     from,
@@ -102,7 +102,7 @@ func NewEmailHandler(opt *EmailOptions) (*EmailHandler, error) {
 }
 
 // Register returns nil when the given address is valid.
-func (s *EmailHandler) Register(handle string) error {
+func (s *EmailHandleService) Register(handle string) error {
 	a, err := mail.ParseAddress(handle)
 	if err != nil {
 		return err
@@ -114,7 +114,7 @@ func (s *EmailHandler) Register(handle string) error {
 }
 
 // Listed return true when the given address is listed.
-func (s *EmailHandler) Listed(handle string) bool {
+func (s *EmailHandleService) Listed(handle string) bool {
 	a, err := mail.ParseAddress(handle)
 	if err != nil {
 		return false
@@ -132,7 +132,7 @@ func (s *EmailHandler) Listed(handle string) bool {
 
 // Notify returns nil when the given login URL is succesfully sent to the given
 // email address.
-func (s *EmailHandler) Notify(handle, loginurl string) error {
+func (s *EmailHandleService) Notify(handle, loginurl string) error {
 	a, err := mail.ParseAddress(handle)
 	if err != nil {
 		return err
