@@ -29,27 +29,6 @@ Best,
 Multipass Bot
 `
 
-// A HandleService is an interface used by a Multipass instance to register,
-// list user handles and notify users about requested access tokens.
-// A handle is a unique user identifier, e.g. email address.
-type HandleService interface {
-	// Register returns nil when the given handle is accepted for
-	// registration with the service.
-	// The handle is passed on by the Multipass instance and can represent
-	// an username, email address or even an URI representing a connection to
-	// a datastore. The latter allows the HandleService to be associated
-	// with a RDBMS from which to verify listed users.
-	Register(handle string) error
-
-	// Listed returns true when the given handle is listed with the
-	// service.
-	Listed(handle string) bool
-
-	// Notify returns nil when the given login URL is succesfully
-	// communicated to the given handle.
-	Notify(handle, loginurl string) error
-}
-
 // EmailHandleService implements the HandleService interface. Handles are interperted
 // as email addresses.
 type EmailHandleService struct {
