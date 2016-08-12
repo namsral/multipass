@@ -103,7 +103,7 @@ Multipass-Handle: <user handle>
 Install
 -------
 
-Donwload the binary from the [releases][releases] page. If your platform isn't listed please submit a PR.
+Download the binary from the [releases][releases] page. If your platform isn't listed please submit a PR.
 
 
 ### Build
