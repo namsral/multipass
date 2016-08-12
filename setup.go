@@ -121,16 +121,16 @@ func multipassParse(c *caddy.Controller) ([]Rule, error) {
 			if len(rule.Handles) < 1 {
 				return rules, c.Err("Expecting at least one handle")
 			}
-			if len(rule.MailFrom) != 1 {
-				return rules, c.Err("Expecting a single mail from addres")
-			}
-			if len(rules) != 1 {
-				return rules, c.Err("Expecting one directive per site")
+			if rule.MailFrom == "" {
+				return rules, c.Err("Expecting a single mail from address FOOBAR")
 			}
 			rules = append(rules, rule)
 		default:
 			return rules, c.Err("Single line directives not supported")
 		}
+	}
+	if len(rules) != 1 {
+		return rules, c.Err("Expecting one directive per site" + string(len(rules)))
 	}
 	return rules, nil
 }

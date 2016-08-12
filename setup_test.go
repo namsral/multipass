@@ -63,7 +63,7 @@ func TestParse(t *testing.T) {
 		if err == nil && test.shouldErr {
 			t.Errorf("test #%d should return an error, but did not", i)
 		} else if err != nil && !test.shouldErr {
-			t.Errorf("test #%d should not return an error, but did", i)
+			t.Errorf("test #%d should not return an error, but did with %s", i, err)
 		}
 		if !test.shouldErr && len(actual) != len(test.expected) {
 			t.Errorf("test #%d: expected %d rules, actual %d rules", i, len(test.expected), len(actual))
