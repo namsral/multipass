@@ -26,7 +26,7 @@ func setup(c *caddy.Controller) error {
 		return nil
 	})
 
-	rules, err := parse(c)
+	rules, err := multipassParse(c)
 	if err != nil {
 		return err
 	}
@@ -52,7 +52,7 @@ func setup(c *caddy.Controller) error {
 	return nil
 }
 
-func parse(c *caddy.Controller) ([]Rule, error) {
+func multipassParse(c *caddy.Controller) ([]Rule, error) {
 	var rules []Rule
 	for c.Next() {
 		var rule Rule

@@ -59,7 +59,7 @@ func TestParse(t *testing.T) {
 		},
 	}
 	for i, test := range tests {
-		actual, err := parse(caddy.NewTestController("http", test.input))
+		actual, err := multipassParse(caddy.NewTestController("http", test.input))
 		if err == nil && test.shouldErr {
 			t.Errorf("test #%d should return an error, but did not", i)
 		} else if err != nil && !test.shouldErr {
