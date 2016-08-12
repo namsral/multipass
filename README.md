@@ -19,6 +19,7 @@ What's here?
 	- Automatic HTTPS
 	- Reverse Proxy
 - [Install](#install)
+- [Extending](#extending)
 - [Contribute](#contribute)
 
 ---
@@ -138,6 +139,39 @@ Building the Multipass command.
 	```
 
 The next thing is to create a configuration file and run the multipass command.
+
+
+Extending
+---------
+
+_Exting Multipass by implementing the Handle Service interface._
+
+The current __something they own__ is the users email address and access tokens are sent to this address. But the __something they own__ can also be a mobile number which can receive SMS messages, or a connected device which can receive Push notifications, chat messages and many more.  
+By implementing the HandleService, shown below, Multipass can be extended to support other _handle services_ which can identify and notify users.
+
+```go
+// A HandleService is an interface used by a Multipass instance to register,
+// list user handles and notify users about requested access tokens.
+// A handle is a unique user identifier, e.g. email address.
+type HandleService interface {
+	// Register returns nil when the given handle is accepted for
+	// registration with the service.
+	// The handle is passed on by the Multipass instance and can represent
+	// an username, email address or even an URI representing a connection to
+	// a datastore. The latter allows the HandleService to be associated
+	// with a RDBMS from which to verify listed users.
+	Register(handle string) error
+
+	// Listed returns true when the given handle is listed with the
+	// service.
+	Listed(handle string) bool
+
+	// Notify returns nil when the given login URL is succesfully
+	// communicated to the given handle.
+	Notify(handle, loginurl string) error
+}
+
+```
 
 
 Contribute
