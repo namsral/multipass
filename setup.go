@@ -79,17 +79,17 @@ func multipassParse(c *caddy.Controller) ([]Rule, error) {
 				case "expires":
 					args := c.RemainingArgs()
 					if len(args) != 1 {
-						return rules, c.Err("Expecting a single expiry time duration")
+						return rules, c.Err("Expecting a single Go formatted time duration")
 					}
 					d, err := time.ParseDuration(args[0])
 					if err != nil {
-						return rules, c.Err("Expecting a valida Go formatted time duration")
+						return rules, c.Err("Expecting a single Go formatted time duration")
 					}
 					rule.Expires = d
 				case "smtp_addr":
 					args := c.RemainingArgs()
 					if len(args) != 1 {
-						return rules, c.Err("Expecting a single SMTP address")
+						return rules, c.Err("Expecting a single SMTP server address")
 					}
 					rule.SMTPAddr = args[0]
 				case "smtp_user":
@@ -118,13 +118,13 @@ func multipassParse(c *caddy.Controller) ([]Rule, error) {
 					rule.MailTmpl = args[0]
 				}
 			}
-			if len(rule.Handles) == 0 {
+			if len(rule.Handles) < 1 {
 				return rules, c.Err("Expecting at least one handle")
 			}
-			if len(rule.MailFrom) == 0 {
+			if len(rule.MailFrom) != 1 {
 				return rules, c.Err("Expecting a single mail from addres")
 			}
-			if len(rules) > 0 {
+			if len(rules) != 1 {
 				return rules, c.Err("Expecting one directive per site")
 			}
 			rules = append(rules, rule)
