@@ -61,15 +61,13 @@ type Multipass struct {
 // NewMultipassFromRule return a new instance of Multipass from the given Rule.
 // Returned error will most likely be parser errors.
 func NewMultipassFromRule(r Rule) (*Multipass, error) {
-	m, err := NewMultipass()
+	m, err := NewMultipass(r.Basepath)
 	if err != nil {
 		return nil, err
 	}
+
 	if len(r.Resources) > 0 {
 		m.Resources = r.Resources
-	}
-	if len(r.Basepath) > 0 {
-		m.Basepath = path.Join("/", r.Basepath)
 	}
 	if r.Expires > 0 {
 		m.Expires = r.Expires
@@ -86,25 +84,10 @@ func NewMultipassFromRule(r Rule) (*Multipass, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	for _, handle := range r.Handles {
 		handler.Register(handle)
 	}
 	m.Handler = handler
-
-	mux := http.NewServeMux()
-	mux.HandleFunc(path.Join(m.Basepath, "/"), m.rootHandler)
-	mux.HandleFunc(path.Join(m.Basepath, "/login"), m.loginHandler)
-	mux.HandleFunc(path.Join(m.Basepath, "/confirm"), m.confirmHandler)
-	mux.HandleFunc(path.Join(m.Basepath, "/signout"), m.signoutHandler)
-	mux.HandleFunc(path.Join(m.Basepath, "/pub.cer"), m.publickeyHandler)
-	m.mux = mux
-
-	tmpl, err := loadTemplates()
-	if err != nil {
-		return nil, err
-	}
-	m.tmpl = tmpl
 
 	return m, nil
 }
@@ -112,7 +95,15 @@ func NewMultipassFromRule(r Rule) (*Multipass, error) {
 // NewMultipass returns a new instance of Multipass with reasonalble defaults
 // like a 2048 bit RSA key pair, /multipass as basepath, 24 hours before a
 // token will expire.
-func NewMultipass() (*Multipass, error) {
+func NewMultipass(basepath string) (*Multipass, error) {
+	// Absolute the given basepath or set a default
+	if len(basepath) > 0 {
+		basepath = path.Join("/", basepath)
+	} else {
+		basepath = "/multipass"
+	}
+
+	// Generate the RSA key pari
 	pk, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, err
@@ -121,13 +112,32 @@ func NewMultipass() (*Multipass, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Multipass{
+
+	// Load HTML templates
+	tmpl, err := loadTemplates()
+	if err != nil {
+		return nil, err
+	}
+
+	m := &Multipass{
 		Resources: []string{"/"},
-		Basepath:  "/multipass",
+		Basepath:  basepath,
 		Expires:   time.Hour * 24,
 		key:       pk,
 		signer:    signer,
-	}, nil
+		tmpl:      tmpl,
+	}
+
+	// Create the router
+	mux := http.NewServeMux()
+	mux.HandleFunc(path.Join(basepath, "/"), m.rootHandler)
+	mux.HandleFunc(path.Join(basepath, "/login"), m.loginHandler)
+	mux.HandleFunc(path.Join(basepath, "/confirm"), m.confirmHandler)
+	mux.HandleFunc(path.Join(basepath, "/signout"), m.signoutHandler)
+	mux.HandleFunc(path.Join(basepath, "/pub.cer"), m.publickeyHandler)
+	m.mux = mux
+
+	return m, nil
 }
 
 // Claims are part of the JSON web token
