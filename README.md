@@ -21,6 +21,8 @@ What's here?
 - [Install](#install)
 - [Contribute](#contribute)
 
+---
+
 
 ### Goal
 
