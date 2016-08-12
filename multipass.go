@@ -172,6 +172,9 @@ func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
 		var claims *Claims
 		if claims, err = validateToken(tokenStr, m.key.PublicKey); err != nil {
 			p.Page = tokenInvalidPage
+			if s := r.Referer(); !httpserver.Path(s).Matches(m.Basepath) {
+				p.NextURL = s
+			}
 			m.tmpl.ExecuteTemplate(w, "page", p)
 			return
 		}
