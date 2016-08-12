@@ -1,14 +1,25 @@
 Multipass
 =========
 
-Multipass is a reverse proxy to securely expose web resources and services to the internet using automatic HTTPS and user authentication.
+Multipass is a reverse proxy to securely expose web resources and services to the internet using automatic HTTPS and user access control.
 
 Multipass implements the idea to authenticate users based on __something they own__ instead of __something they know__. This is better known as the second factor of [Two-factor Authentication][2fa].
-A user can be authenticated by providing their email address and opening a login link instead of remembering yet another email address.
 
-Automatic HTTPS is provided using [Let's Encrypt][lets].
 
-Multipass can be downloaded from the [releases][releases] page.
+What's here?
+------------
+
+- [Goal](#goal)
+- [Motivation](#motivation)
+- [How it Works](#how-it-works)
+	- User Flow
+	- Configuration
+	- JWT
+	- RSA Key Pairs
+	- Automatic HTTPS
+	- Reverse Proxy
+- [Install](#install)
+- [Contribute](#contribute)
 
 
 ### Goal
@@ -18,14 +29,14 @@ Protect internet exposed web resources and services with automatic HTTPS (TLS) a
 
 ### Motivation
 
-Many private or intranet services aren't well suited to expose to the internet. Using Multipass, the online service is protected using automatic HTTPS (TLS) and access can be granted on an individual basis by sending users an access token.
+Many private web resources and services end up exposed on the internet, accessible by anyone. Think IP video cameras, Key-value stores, analytic applications and many more. Using Multipass, these web resources and services can be protected using automatic HTTPS (TLS) and access can be granted on an individual basis.
 
 
 ### How it works
 
 Multipass works by sending the user a login link with an embedded access token. When the user follows the login link the access token is stored in the browser session and used to authenticate the user on successive requests. The access token is a JSON web token containing claims specific to Multipass and signed with a RSA key pair.
 
-__User access flow:__
+__User flow:__
 
 1. User visits protected resource
 2. User is redirected to log-in page and enters a known handle, e.g. email address
@@ -66,7 +77,7 @@ __JWT__
 Access tokens are signed [JSON Web Tokens][jwt] with specific claims like user handle and expire date. The tokens are embedded in login links which are sent to user.
 
 
-__RSA key pair__
+__RSA key pairs__
 
 By default, Multipass uses a random RSA key pair to sign and verify user access tokens. These tokens can be also be used and verified by others using the public key. Made available at `[basepath]/pub.cer` when Multipass is running.
 
@@ -85,6 +96,12 @@ The user handle which was used to authenticate the user is passed down to the pr
 ```
 Multipass-Handle: <user handle>
 ```
+
+
+Install
+-------
+
+Donwload the binary from the [releases][releases] page. If your platform isn't listed please submit a PR.
 
 
 ### Build
@@ -114,12 +131,23 @@ Building the Multipass command.
 3. Get the Multipass source code and build the command:
 
 	```sh
-	$ go github.com/namsral/multipass
+	$ go ithub.com/namsral/multipass
 	$ go install github.com/namsral/multipass/cmd/multipass
 	```
 
 The next thing is to create a configuration file and run the multipass command.
 
+
+Contribute
+----------
+
+Contributing is easy:
+
+1. Fork this repo
+2. Checkout a new branch
+3. Submit a pull-request
+
+Or follow GiHub's guide to [using-pull-requests].
 
 
 [lets]:https://letsencrypt.org
@@ -128,5 +156,5 @@ The next thing is to create a configuration file and run the multipass command.
 [jwt]:https://jwt.io
 [goduration]:https://golang.org/pkg/time/#ParseDuration
 [releases]:https://github.com/namsral/multipass/releases
-[build]:https://github.com/namsral/multipass#build
 [2fa]:https://en.wikipedia.org/wiki/Multi-factor_authentication
+[using-pull-requests]:https://help.github.com/articles/using-pull-requests/
