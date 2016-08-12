@@ -1,4 +1,4 @@
-package multipass
+package email
 
 import (
 	"bytes"
@@ -29,9 +29,9 @@ Best,
 Multipass Bot
 `
 
-// EmailHandleService implements the HandleService interface. Handles are interperted
+// HandleService implements the HandleService interface. Handles are interperted
 // as email addresses.
-type EmailHandleService struct {
+type HandleService struct {
 	auth     smtp.Auth
 	addr     string
 	from     *mail.Address
@@ -41,14 +41,14 @@ type EmailHandleService struct {
 	list []string
 }
 
-// EmailHandleOptions is used to construct a new EmailHandler using the
-// NewEmailHandler function.
-type EmailHandleOptions struct {
+// HandleOptions is used to construct a new HandleService using the
+// NewHandleService function.
+type HandleOptions struct {
 	Addr, Username, Password, FromAddr string
 }
 
-// NewEmailHandler returns a new EmailHandler instance with the given options.
-func NewEmailHandler(opt *EmailHandleOptions) (*EmailHandleService, error) {
+// NewHandleService returns a new HandleService instance with the given options.
+func NewHandleService(opt *HandleOptions) (*HandleService, error) {
 	host := "localhost"
 	port := "25"
 	if len(opt.Addr) > 0 {
@@ -72,7 +72,7 @@ func NewEmailHandler(opt *EmailHandleOptions) (*EmailHandleService, error) {
 
 	t := template.Must(template.New("email").Parse(emailTemplate))
 
-	return &EmailHandleService{
+	return &HandleService{
 		addr:     addr,
 		auth:     auth,
 		from:     from,
@@ -81,7 +81,7 @@ func NewEmailHandler(opt *EmailHandleOptions) (*EmailHandleService, error) {
 }
 
 // Register returns nil when the given address is valid.
-func (s *EmailHandleService) Register(handle string) error {
+func (s *HandleService) Register(handle string) error {
 	a, err := mail.ParseAddress(handle)
 	if err != nil {
 		return err
@@ -93,7 +93,7 @@ func (s *EmailHandleService) Register(handle string) error {
 }
 
 // Listed return true when the given address is listed.
-func (s *EmailHandleService) Listed(handle string) bool {
+func (s *HandleService) Listed(handle string) bool {
 	a, err := mail.ParseAddress(handle)
 	if err != nil {
 		return false
@@ -111,7 +111,7 @@ func (s *EmailHandleService) Listed(handle string) bool {
 
 // Notify returns nil when the given login URL is succesfully sent to the given
 // email address.
-func (s *EmailHandleService) Notify(handle, loginurl string) error {
+func (s *HandleService) Notify(handle, loginurl string) error {
 	a, err := mail.ParseAddress(handle)
 	if err != nil {
 		return err

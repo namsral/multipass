@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/mholt/caddy/caddyhttp/httpserver"
+
+	"github.com/namsral/multipass/services/email"
 )
 
 // Auth wraps a Multipass instance to be used by the caddy web server.
@@ -50,13 +52,13 @@ type Rule struct {
 // Returned error will most likely be parser errors.
 func NewMultipassFromRule(r Rule) (*Multipass, error) {
 	// Create a HandleService
-	opt := &EmailHandleOptions{
+	opt := &email.HandleOptions{
 		r.SMTPAddr,
 		r.SMTPUser,
 		r.SMTPPass,
 		r.MailFrom,
 	}
-	service, err := NewEmailHandler(opt)
+	service, err := email.NewHandleService(opt)
 	if err != nil {
 		return nil, err
 	}
