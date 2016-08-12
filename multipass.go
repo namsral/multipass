@@ -16,8 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mholt/caddy/caddyhttp/httpserver"
-
 	jose "gopkg.in/square/go-jose.v1"
 )
 
@@ -122,7 +120,7 @@ func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
 		// Show login page when there is no token
 		tokenStr, err := extractToken(r)
 		if err != nil {
-			if s := r.Referer(); !httpserver.Path(s).Matches(m.Basepath) {
+			if s := r.Referer(); !strings.HasPrefix(s, m.Basepath) {
 				p.NextURL = s
 			}
 			m.tmpl.ExecuteTemplate(w, "page", p)
@@ -131,7 +129,7 @@ func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
 		var claims *Claims
 		if claims, err = validateToken(tokenStr, m.key.PublicKey); err != nil {
 			p.Page = tokenInvalidPage
-			if s := r.Referer(); !httpserver.Path(s).Matches(m.Basepath) {
+			if s := r.Referer(); !strings.HasPrefix(s, m.Basepath) {
 				p.NextURL = s
 			}
 			m.tmpl.ExecuteTemplate(w, "page", p)
@@ -304,7 +302,7 @@ func tokenHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 	// Verify path claim
 	var match bool
 	for _, path := range claims.Resources {
-		if httpserver.Path(r.URL.Path).Matches(path) {
+		if strings.HasPrefix(r.URL.Path, path) {
 			match = true
 			continue
 		}
