@@ -1,5 +1,8 @@
 package multipass
 
+// Add the multipass directive to the caddy source in order to build the plugin.
+// source: github.com/mholt/caddy/caddyhttp/httpserver/plugin.go
+
 import (
 	"errors"
 	"fmt"
@@ -11,8 +14,6 @@ import (
 
 const directive = "multipass"
 
-// Add the multipass directive to the caddy source in order to build the plugin
-// source: github.com/mholt/caddy/caddyhttp/httpserver/plugin.go
 func init() {
 	caddy.RegisterPlugin(directive, caddy.Plugin{
 		ServerType: "http",
