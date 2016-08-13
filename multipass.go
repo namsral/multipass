@@ -1,3 +1,6 @@
+// Copyright 2016 Lars Wiegman. All rights reserved. Use of this source code is
+// governed by a BSD-style license that can be found in the LICENSE file.
+
 package multipass
 
 import (
@@ -361,6 +364,8 @@ func validateToken(token string, key rsa.PublicKey) (*Claims, error) {
 	return claims, nil
 }
 
+// verifyToken returns the payload of the given token when the signature
+// can be verified using the given public key.
 func verifyToken(token string, key rsa.PublicKey) ([]byte, error) {
 	var data []byte
 

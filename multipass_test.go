@@ -1,3 +1,6 @@
+// Copyright 2016 Lars Wiegman. All rights reserved. Use of this source code is
+// governed by a BSD-style license that can be found in the LICENSE file.
+
 package multipass
 
 import (
@@ -5,6 +8,10 @@ import (
 	"net/url"
 	"testing"
 )
+
+func TestVerifyToken(t *testing.T) {
+	var tests = struct{}{}
+}
 
 func TestExtractToken(t *testing.T) {
 	actual := "test"
