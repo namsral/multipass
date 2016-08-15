@@ -5,6 +5,7 @@ package multipass
 
 import (
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/mholt/caddy/caddyhttp/httpserver"
@@ -30,9 +31,16 @@ func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 	for _, path := range m.Resources {
 		if httpserver.Path(r.URL.Path).Matches(path) {
 			if _, err := tokenHandler(w, r, m); err != nil {
-				r.Header.Set("Referer", r.URL.String())
-				m.rootHandler(w, r)
-				return 0, nil
+				u, err := url.Parse(m.SiteAddr)
+				if err != nil {
+					return http.StatusInternalServerError, nil
+				}
+				v := url.Values{}
+				v.Set("url", r.URL.String())
+				u.RawQuery = v.Encode()
+				u.Path = m.Basepath
+				http.Redirect(w, r, u.String(), http.StatusSeeOther)
+				return http.StatusSeeOther, nil
 			}
 		}
 	}

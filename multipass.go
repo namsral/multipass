@@ -125,7 +125,7 @@ func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
 		// Show login page when there is no token
 		tokenStr, err := extractToken(r)
 		if err != nil {
-			if s := r.Referer(); !strings.HasPrefix(s, m.Basepath) {
+			if s := r.URL.Query().Get("url"); !strings.HasPrefix(s, m.Basepath) {
 				p.NextURL = s
 			}
 			m.tmpl.ExecuteTemplate(w, "page", p)
@@ -134,7 +134,7 @@ func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
 		var claims *Claims
 		if claims, err = validateToken(tokenStr, m.key.PublicKey); err != nil {
 			p.Page = tokenInvalidPage
-			if s := r.Referer(); !strings.HasPrefix(s, m.Basepath) {
+			if s := r.URL.Query().Get("url"); !strings.HasPrefix(s, m.Basepath) {
 				p.NextURL = s
 			}
 			m.tmpl.ExecuteTemplate(w, "page", p)
