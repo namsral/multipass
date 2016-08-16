@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -240,40 +241,49 @@ func (m *Multipass) signoutHandler(w http.ResponseWriter, r *http.Request) {
 // publickeyHandler writes the public key to the given ResponseWriter to allow
 // other to validate Multipass signed tokens.
 func (m *Multipass) publickeyHandler(w http.ResponseWriter, r *http.Request) {
-	data, err := x509.MarshalPKIXPublicKey(&m.key.PublicKey)
+	err := publicKeyWriter(w, &m.key.PublicKey)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		return
+	}
+	w.Header().Set("Content-Type", "application/pkix-cert")
+}
+
+func publicKeyWriter(w io.Writer, key *rsa.PublicKey) error {
+	data, err := x509.MarshalPKIXPublicKey(key)
+	if err != nil {
+		return err
 	}
 	block := &pem.Block{
 		Type:  "PUBLIC KEY",
 		Bytes: data,
 	}
-	w.Header().Set("Content-Type", "application/pkix-cert")
 	if err := pem.Encode(w, block); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+		return err
 	}
+	return nil
 }
 
 // AccessToken returns a new signed and serialized token with the given handle
 // as a claim.
 func (m *Multipass) AccessToken(handle string) (tokenStr string, err error) {
-	exp := time.Now().Add(m.Expires)
 	claims := &Claims{
 		Handle:    handle,
 		Resources: m.Resources,
-		Expires:   exp.Unix(),
+		Expires:   time.Now().Add(m.Expires).Unix(),
 	}
+	return accessToken(m.signer, claims)
+}
+
+// accessToken return the serialized token given the signer and claims.
+func accessToken(signer jose.Signer, claims *Claims) (token string, err error) {
 	payload, err := json.Marshal(claims)
 	if err != nil {
 		return "", err
 	}
-	jws, err := m.signer.Sign(payload)
+	jws, err := signer.Sign(payload)
 	if err != nil {
 		return "", err
 	}
-
 	return jws.CompactSerialize()
 }
 
