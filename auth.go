@@ -59,9 +59,9 @@ type Rule struct {
 	MailFrom, MailTmpl           string
 }
 
-// NewMultipassFromRule return a new instance of Multipass from the given Rule.
+// NewMultipassRule return a new instance of Multipass from the given Rule.
 // Returned error will most likely be parser errors.
-func NewMultipassFromRule(r Rule) (*Multipass, error) {
+func NewMultipassRule(r Rule) (*Multipass, error) {
 	// Create a HandleService
 	opt := &email.HandleOptions{
 		r.SMTPAddr,
