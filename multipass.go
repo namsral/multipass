@@ -323,7 +323,7 @@ func tokenHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 		}
 	}
 	if !match {
-		return http.StatusUnauthorized, ErrInvalidToken
+		return http.StatusForbidden, errors.New("forbidden")
 	}
 
 	// Pass on authorized handle to downstream handlers
