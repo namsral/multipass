@@ -25,7 +25,7 @@ func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 
 	if httpserver.Path(r.URL.Path).Matches(m.Basepath) {
 		m.ServeHTTP(w, r)
-		return 0, nil
+		return 200, nil
 	}
 
 	for _, path := range m.Resources {
