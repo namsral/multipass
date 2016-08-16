@@ -54,7 +54,7 @@ func NewMultipass(basepath string, service HandleService) (*Multipass, error) {
 		basepath = "/multipass"
 	}
 
-	// Generate the RSA key pari
+	// Generate the RSA key pairs
 	pk, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, err
