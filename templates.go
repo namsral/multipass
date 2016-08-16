@@ -97,7 +97,7 @@ body {
 	margin: 4rem auto;
 	text-align: center;
 	padding: 1rem 0;
-	border: solid .16rem #0d8eba;
+	border: solid .2rem #0d8eba;
 	border-radius: .8rem;
 	padding: 1rem 2rem;
 	background-color: #fff;
@@ -121,14 +121,13 @@ body {
 	height: 2.8rem;
 	border-radius: .4rem;
 	border-style: solid;
-	border-width: .16rem;
+	border-width: .2rem;
 }
 .login-form input[type=submit] {
 }
 .btn {
 	font-family: sans-serif;
 	font-size: 1.2rem;
-	line-height: 2rem;
 	margin: 1rem 0;
 	padding: .5rem 1rem;
 	width: 100%;
@@ -140,11 +139,12 @@ body {
 	color: #fff;
 	height: 3rem;
 	cursor: pointer;
+	display: inline-block;
+	line-height: 2rem;
 }
 a.btn {
 	text-decoration: none;
 	color: white;
-	display: block;
 }
 .btn-default {
 	background-color: #0d8eba;
