@@ -38,7 +38,7 @@ func setup(c *caddy.Controller) error {
 		return errors.New("No directive declared")
 	}
 
-	multipass, err := NewMultipassFromRule(rules[0])
+	multipass, err := NewMultipassRule(rules[0])
 	if err != nil {
 		return err
 	}
