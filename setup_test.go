@@ -49,6 +49,14 @@ func TestParse(t *testing.T) {
 			},
 		}},
 		{`multipass {
+			expires a
+		  }`, true, []Rule{},
+		},
+		{`multipass {
+		  }`, true, []Rule{},
+		},
+		{`multipass {
+			handles
 		  }`, true, []Rule{},
 		},
 		{`multipass {
@@ -60,6 +68,35 @@ func TestParse(t *testing.T) {
 			mail_from "Multipass <no-reply@dallas>"
 		  }`, true, []Rule{},
 		},
+		{`multipass {
+			basepath a b
+		  }`, true, []Rule{},
+		},
+		{`multipass {
+			expires 12h 12h
+		  }`, true, []Rule{},
+		},
+		{`multipass {
+			smtp_addr a b
+		  }`, true, []Rule{},
+		},
+		{`multipass {
+			smtp_user a b
+		  }`, true, []Rule{},
+		},
+		{`multipass {
+			smtp_pass a b
+		  }`, true, []Rule{},
+		},
+		{`multipass {
+			mail_from a b
+		  }`, true, []Rule{},
+		},
+		{`multipass {
+			mail_tmpl a b
+		  }`, true, []Rule{},
+		},
+		{`multipass a`, true, []Rule{}},
 	}
 	for i, test := range tests {
 		actual, err := multipassParse(caddy.NewTestController("http", test.input))
