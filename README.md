@@ -1,3 +1,5 @@
+![mutipass preview][logo]
+
 Multipass
 =========
 
@@ -195,3 +197,4 @@ Or follow GiHub's guide to [using-pull-requests].
 [releases]:https://github.com/namsral/multipass/releases
 [2fa]:https://en.wikipedia.org/wiki/Multi-factor_authentication
 [using-pull-requests]:https://help.github.com/articles/using-pull-requests/
+[logo]: https://namsral.github.io/multipass/img/multipass.png "Multipass preview"
