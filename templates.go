@@ -57,7 +57,7 @@ func loadTemplates() (*template.Template, error) {
 			{{ template "loginform" . }}
 			<p class="notice">This resource is protected. Submit your handle to gain access.</p>
 		{{ else if eq .Page 1 }}
-			<p class="notice">Your access token has expired or is invalid. Submit your handle to request a one.</p>
+			<p class="notice">Your access token has expired or is invalid. Submit your handle to request a new one.</p>
 			{{ template "loginform" . }}
 			<p class="notice">This resource is protected.</p>
 		{{ else if eq .Page 2 }}
