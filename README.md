@@ -69,7 +69,7 @@ Building the Multipass command.
 3. Get the Multipass source code and build the command:
 
 	```sh
-	$ go ithub.com/namsral/multipass
+	$ go get github.com/namsral/multipass
 	$ go install github.com/namsral/multipass/cmd/multipass
 	```
 
