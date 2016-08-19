@@ -3,9 +3,11 @@
 Multipass
 =========
 
-Multipass is a reverse proxy to securely expose web resources and services to the internet using automatic HTTPS and user access control.
+Multipass is a remote proxy which can be used to protect web resources and services using user access control. Users are authenticated using a challenge; prove they are the owner of the registered email address by following a login link.
 
 Multipass implements the idea to authenticate users based on __something they own__ instead of __something they know__. This is better known as the second factor of [Two-factor Authentication][2fa].
+
+Login links are encoded [JSON Web Tokens][jwt] containing information about the user and their accessible resources. These tokens are used as access tokens with an expiration date and are signed using a random RSA key pair to prevent forgeries.
 
 
 ### Goal
@@ -97,11 +99,13 @@ example.com {
 }
 ```
 
-- __resource__: path of resources to protect. _Default: /_
+- __resources__: path of resources to protect. _Default: /_
 - __handles__: the handles which identify the users. _Required_
 - __basepath__: path to the log-in and sign-out page. _Default: /multipass_
-- __expires__: The time duration after which the token expires. Any time duration Go can [parse][goduration]. _Default: 12h_
+- __expires__: The time duration after which the token expires. Any time duration Go can [parse][goduration]. _Default: 24h_
 - __smtp_addr__: Mailserver address used for sending login links. _Default: localhost:25_
+- __smtp_user__: Mailserver username used for authentication.
+- __smtp_pass__: Mailserver password used for authentication.
 - __mail_from__: From address used in email messages sent to users. _Required_
 
 
