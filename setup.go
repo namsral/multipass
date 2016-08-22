@@ -25,8 +25,9 @@ func init() {
 }
 
 func setup(c *caddy.Controller) error {
+	cfg := httpserver.GetConfig(c)
 	c.OnStartup(func() error {
-		fmt.Println(directive + " is intialized")
+		fmt.Printf("%s for %s is initialized\n", directive, cfg.Addr.String())
 		return nil
 	})
 
@@ -43,7 +44,6 @@ func setup(c *caddy.Controller) error {
 		return err
 	}
 
-	cfg := httpserver.GetConfig(c)
 	multipass.SiteAddr = cfg.Addr.String()
 	mid := func(next httpserver.Handler) httpserver.Handler {
 		return &Auth{
