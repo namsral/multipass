@@ -7,7 +7,7 @@ Multipass is a remote proxy which can be used to protect web resources and servi
 
 Multipass implements the idea to authenticate users based on __something they own__ instead of __something they know__. This is better known as the second factor of [Two-factor Authentication][2fa].
 
-Login links are encoded [JSON Web Tokens][jwt] containing information about the user and their accessible resources. These tokens are used as access tokens with an expiration date and are signed using a random RSA key pair to prevent forgeries.
+Login links are encoded [JSON Web Tokens][jwt] containing information about the user and their accessible resources. These tokens are used as access tokens with an expiration date and are signed using an on startup generated RSA key pair.
 
 
 ### Goal
