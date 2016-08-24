@@ -53,6 +53,10 @@ func setup(c *caddy.Controller) error {
 	}
 	cfg.AddMiddleware(mid)
 
+	c.OnShutdown(func() error {
+		return multipass.HandleService.Close()
+	})
+
 	return nil
 }
 

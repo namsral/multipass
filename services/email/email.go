@@ -4,44 +4,60 @@
 package email
 
 import (
-	"bytes"
+	"fmt"
+	"io"
+	"log"
 	"net"
 	"net/mail"
-	"net/smtp"
+	"strconv"
 	"sync"
 	"text/template"
 	"time"
+
+	"gopkg.in/gomail.v2"
 )
 
-const emailTemplate = `Subject: Multipass login
-From: {{.From}}
-To: {{.To}}
-Date: {{.Date}}
-
+const msgTmpl = `
+{{ define "text/plain" }}
 Hi,
 
-You requested a Multipass access token. Please follow the link to login:
+You requested a Multipass access token. Please follow the link to login.
 
 	{{.LoginURL}}
 
 Didn't request an access token? Please ignore this message, no harm done.
 
-
-Best,
+Be secure,
 
 Multipass Bot
+{{ end }}
+
+{{ define "text/html" }}
+<p>Hi,<p>
+
+<p>You requested a Multipass access token. Please follow the link to login.</p>
+
+<p><a href="{{.LoginURL}}">Multipass Login Link</a></p>
+
+<p>Didn't request an access token? Please ignore this message, no harm done.</p>
+
+<p>Be secure,</p>
+
+<p>Multipass Bot</p>
+{{ end }}
 `
 
 // HandleService implements the HandleService interface. Handles are interperted
 // as email addresses.
 type HandleService struct {
-	auth     smtp.Auth
-	addr     string
 	from     *mail.Address
 	Template *template.Template
 
-	lock sync.Mutex
-	list []string
+	lock    sync.Mutex
+	handles []string
+
+	channel chan *gomail.Message
+	dialer  *gomail.Dialer
 }
 
 // HandleOptions is used to construct a new HandleService using the
@@ -61,26 +77,58 @@ func NewHandleService(opt *HandleOptions) (*HandleService, error) {
 		host = h
 		port = p
 	}
-	addr := net.JoinHostPort(host, port)
-
-	var auth smtp.Auth
-	if len(opt.Username) > 0 && len(opt.Password) > 0 {
-		auth = smtp.PlainAuth("", opt.Username, opt.Password, host)
-	}
 
 	from, err := mail.ParseAddress(opt.FromAddr)
 	if err != nil {
 		return nil, err
 	}
 
-	t := template.Must(template.New("email").Parse(emailTemplate))
+	t := template.Must(template.New("").Parse(msgTmpl))
+	c := make(chan *gomail.Message)
+	p, err := strconv.Atoi(port)
+	if err != nil {
+		return nil, err
+	}
+	d := gomail.NewDialer(host, p, opt.Username, opt.Password)
 
-	return &HandleService{
-		addr:     addr,
-		auth:     auth,
+	go func() {
+		var s gomail.SendCloser
+		var err error
+		open := false
+		for {
+			select {
+			case m, ok := <-c:
+				if !ok {
+					return
+				}
+				if !open {
+					if s, err = d.Dial(); err != nil {
+						panic(err)
+					}
+					open = true
+				}
+				if err := gomail.Send(s, m); err != nil {
+					log.Print(err)
+				}
+			case <-time.After(60 * time.Second):
+				if open {
+					if err := s.Close(); err != nil {
+						log.Print(err)
+					}
+					open = false
+				}
+			}
+		}
+	}()
+
+	s := &HandleService{
 		from:     from,
 		Template: t,
-	}, nil
+		channel:  c,
+		dialer:   d,
+	}
+
+	return s, nil
 }
 
 // Register returns nil when the given address is valid.
@@ -90,7 +138,7 @@ func (s *HandleService) Register(handle string) error {
 		return err
 	}
 	s.lock.Lock()
-	s.list = append(s.list, a.Address)
+	s.handles = append(s.handles, a.Address)
 	s.lock.Unlock()
 	return nil
 }
@@ -102,7 +150,7 @@ func (s *HandleService) Listed(handle string) bool {
 		return false
 	}
 	s.lock.Lock()
-	for _, e := range s.list {
+	for _, e := range s.handles {
 		if e == a.Address {
 			s.lock.Unlock()
 			return true
@@ -115,21 +163,36 @@ func (s *HandleService) Listed(handle string) bool {
 // Notify returns nil when the given login URL is succesfully sent to the given
 // email address.
 func (s *HandleService) Notify(handle, loginurl string) error {
-	a, err := mail.ParseAddress(handle)
+	toAddr, err := mail.ParseAddress(handle)
 	if err != nil {
 		return err
 	}
-	var msg bytes.Buffer
-	data := struct {
-		From, Date, To, LoginURL string
-	}{
-		From:     s.from.String(),
-		Date:     time.Now().Format(time.RFC1123Z),
-		To:       a.String(),
-		LoginURL: loginurl,
-	}
-	if err := s.Template.ExecuteTemplate(&msg, "email", data); err != nil {
+
+	m := gomail.NewMessage()
+	m.SetHeader("From", s.from.String())
+	m.SetHeader("Return-Path", fmt.Sprintf("<%s>", s.from.Address))
+	m.SetHeader("To", toAddr.String())
+	m.SetHeader("Date", time.Now().Format(time.RFC1123Z))
+	m.SetHeader("Subject", "Multipass Login")
+
+	data := struct{ LoginURL string }{LoginURL: loginurl}
+	if m.AddAlternativeWriter("text/plain", func(w io.Writer) error {
+		return s.Template.ExecuteTemplate(w, "text/plain", data)
+	}); err != nil {
 		return err
 	}
-	return smtp.SendMail(s.addr, s.auth, s.from.String(), []string{a.Address}, msg.Bytes())
+	if m.AddAlternativeWriter("text/html", func(w io.Writer) error {
+		return s.Template.ExecuteTemplate(w, "text/html", data)
+	}); err != nil {
+		return err
+	}
+
+	s.channel <- m
+	return nil
+}
+
+// Close closes the channel to send mail messages.
+func (s *HandleService) Close() error {
+	close(s.channel)
+	return nil
 }
