@@ -27,6 +27,7 @@ func loadTemplates() (*template.Template, error) {
 <head>
 	<meta charset="utf-8">
 	<meta name="description" content="Multipass">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 	<title>Multipass</title>
 	<style>{{ template "style" }}</style>
 </head>
@@ -88,6 +89,7 @@ main, nav, section, summary {
 body {
 	margin: 0;
 }
+input { -webkit-appearance: none; }
 .wrapper {
 	display: -webkit-flex;
 	-webkit-flex-direction: column;
