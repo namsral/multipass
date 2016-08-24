@@ -38,7 +38,7 @@ func loadTemplates() (*template.Template, error) {
 	template.Must(tmpl.New("loginform").Parse(`
 <form action="{{ .LoginPath }}" method=POST class="login-form">
 	<input type=hidden name=url value="{{ .NextURL }}" />
-	<input type=text name=handle placeholder="Your handle ..." />
+	<input type=email name=handle placeholder="Your handle ..." />
 	<input type=submit value="Submit" class="btn btn-default">
 </form>`))
 
