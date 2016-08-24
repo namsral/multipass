@@ -176,8 +176,10 @@ type HandleService interface {
 	// Notify returns nil when the given login URL is succesfully
 	// communicated to the given handle.
 	Notify(handle, loginurl string) error
-}
 
+	// Close closes any open connections.
+	Close() error
+}
 ```
 
 
