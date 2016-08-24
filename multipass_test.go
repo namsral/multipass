@@ -63,6 +63,10 @@ func (s *TestHandleService) Notify(handle, loginurl string) error {
 	return nil
 }
 
+func (s *TestHandleService) Close() error {
+	return nil
+}
+
 type downstreamHandler struct {
 	public  string
 	private string
