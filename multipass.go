@@ -44,9 +44,9 @@ type Multipass struct {
 	mux    *http.ServeMux
 }
 
-// NewMultipass returns a new instance of Multipass with reasonalble defaults
-// like a 2048 bit RSA key pair, /multipass as basepath, 24 hours before a
-// token will expire.
+// NewMultipass returns a new instance of Multipass with reasonalble defaults:
+// 2048 bit RSA key pair, `/multipass` basepath a token expiration time of
+// 24 hours.
 func NewMultipass(basepath string, service HandleService) (*Multipass, error) {
 	// Absolute the given basepath or set a default
 	if len(basepath) > 0 {
