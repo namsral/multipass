@@ -113,7 +113,7 @@ input { -webkit-appearance: none; }
 }
 .login-form input {
 }
-.login-form input[type=text] {
+.login-form input[type=text], .login-form input[type=email] {
 	font-size: 1.2rem;
 	padding: 0 1rem;
 	border-color: #ddd;
