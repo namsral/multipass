@@ -4,16 +4,15 @@
 package multipass
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"html/template"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"strings"
 	"time"
@@ -53,10 +52,22 @@ func NewMultipass(basepath string, service HandleService) (*Multipass, error) {
 		basepath = "/multipass"
 	}
 
-	// Generate the RSA key pairs
-	pk, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return nil, err
+	// Get or generate and set the RSA key pairs
+	var pk *rsa.PrivateKey
+	buf := bytes.NewBufferString(os.Getenv(PKENV))
+	if key := pemDecodePrivateKey(buf.Bytes()); key != nil {
+		pk = key
+	} else {
+		key, err := rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			return nil, err
+		}
+		pk = key
+		if err := pemEncodePrivateKey(buf, pk); err != nil {
+			log.Println(err)
+		} else {
+			os.Setenv(PKENV, buf.String())
+		}
 	}
 	signer, err := jose.NewSigner(jose.PS512, pk)
 	if err != nil {
@@ -232,26 +243,11 @@ func (m *Multipass) signoutHandler(w http.ResponseWriter, r *http.Request) {
 // publickeyHandler writes the public key to the given ResponseWriter to allow
 // other to validate Multipass signed tokens.
 func (m *Multipass) publickeyHandler(w http.ResponseWriter, r *http.Request) {
-	err := publicKeyWriter(w, &m.key.PublicKey)
+	err := pemEncodePublicKey(w, &m.key.PublicKey)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 	w.Header().Set("Content-Type", "application/pkix-cert")
-}
-
-func publicKeyWriter(w io.Writer, key *rsa.PublicKey) error {
-	data, err := x509.MarshalPKIXPublicKey(key)
-	if err != nil {
-		return err
-	}
-	block := &pem.Block{
-		Type:  "PUBLIC KEY",
-		Bytes: data,
-	}
-	if err := pem.Encode(w, block); err != nil {
-		return err
-	}
-	return nil
 }
 
 // AccessToken returns a new signed and serialized token with the given handle
