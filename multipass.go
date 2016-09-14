@@ -35,7 +35,6 @@ type Multipass struct {
 	siteaddr string
 	service  HandleService
 	tmpl     *template.Template
-	mux      *http.ServeMux
 }
 
 // NewMultipass returns a new instance of Multipass with reasonalble defaults:
@@ -72,15 +71,6 @@ func NewMultipass(siteaddr string) (*Multipass, error) {
 		tmpl:      tmpl,
 	}
 
-	// Create the router
-	mux := http.NewServeMux()
-	mux.HandleFunc(path.Join(m.basepath, "/"), m.rootHandler)
-	mux.HandleFunc(path.Join(m.basepath, "/login"), m.loginHandler)
-	mux.HandleFunc(path.Join(m.basepath, "/confirm"), m.confirmHandler)
-	mux.HandleFunc(path.Join(m.basepath, "/signout"), m.signoutHandler)
-	mux.HandleFunc(path.Join(m.basepath, "/pub.cer"), m.publickeyHandler)
-	m.mux = mux
-
 	return m, nil
 }
 
@@ -110,8 +100,23 @@ func (m *Multipass) SetHandleService(s HandleService) {
 
 // ServeHTTP satisfies the ServeHTTP interface
 func (m *Multipass) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if h, p := m.mux.Handler(r); len(p) > 0 {
-		h.ServeHTTP(w, r)
+	if p := strings.TrimPrefix(r.URL.Path, m.BasePath()); len(p) < len(r.URL.Path) {
+		var fn func(http.ResponseWriter, *http.Request)
+		switch p {
+		case "":
+			fn = m.rootHandler
+		case "/login":
+			fn = m.loginHandler
+		case "/signout":
+			fn = m.signoutHandler
+		case "/confirm":
+			fn = m.confirmHandler
+		case "/pub.cer":
+			fn = m.publicKeyHandler
+		default:
+			fn = http.NotFound
+		}
+		fn(w, r)
 		return
 	}
 	http.NotFound(w, r)
@@ -251,9 +256,9 @@ func (m *Multipass) signoutHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusMethodNotAllowed)
 }
 
-// publickeyHandler writes the public key to the given ResponseWriter to allow
+// publicKeyHandler writes the public key to the given ResponseWriter to allow
 // other to validate Multipass signed tokens.
-func (m *Multipass) publickeyHandler(w http.ResponseWriter, r *http.Request) {
+func (m *Multipass) publicKeyHandler(w http.ResponseWriter, r *http.Request) {
 	pk := pemDecodePrivateKey([]byte(os.Getenv(PKENV)))
 	if pk == nil {
 		w.WriteHeader(http.StatusInternalServerError)

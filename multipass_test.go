@@ -340,7 +340,7 @@ func TestMultipassHandlers(t *testing.T) {
 			PostForm: test.postForm,
 			Header:   test.header,
 		}
-		m.mux.ServeHTTP(record, req)
+		m.ServeHTTP(record, req)
 		if actual, expect := record.Code, test.status; actual != expect {
 			t.Errorf("test #%d; expect status %d, got %d", i, expect, actual)
 		}
