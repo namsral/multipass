@@ -35,10 +35,8 @@ type Multipass struct {
 
 	HandleService
 
-	signer jose.Signer
-	key    *rsa.PrivateKey
-	tmpl   *template.Template
-	mux    *http.ServeMux
+	tmpl *template.Template
+	mux  *http.ServeMux
 }
 
 // NewMultipass returns a new instance of Multipass with reasonalble defaults:
@@ -52,26 +50,17 @@ func NewMultipass(basepath string, service HandleService) (*Multipass, error) {
 		basepath = "/multipass"
 	}
 
-	// Get or generate and set the RSA key pairs
-	var pk *rsa.PrivateKey
-	buf := bytes.NewBufferString(os.Getenv(PKENV))
-	if key := pemDecodePrivateKey(buf.Bytes()); key != nil {
-		pk = key
-	} else {
-		key, err := rsa.GenerateKey(rand.Reader, 2048)
+	// Generate and set a private key if none is set
+	if k := pemDecodePrivateKey([]byte(os.Getenv(PKENV))); k == nil {
+		pk, err := rsa.GenerateKey(rand.Reader, 2048)
 		if err != nil {
 			return nil, err
 		}
-		pk = key
+		buf := new(bytes.Buffer)
 		if err := pemEncodePrivateKey(buf, pk); err != nil {
-			log.Println(err)
-		} else {
-			os.Setenv(PKENV, buf.String())
+			return nil, err
 		}
-	}
-	signer, err := jose.NewSigner(jose.PS512, pk)
-	if err != nil {
-		return nil, err
+		os.Setenv(PKENV, buf.String())
 	}
 
 	// Load HTML templates
@@ -85,8 +74,6 @@ func NewMultipass(basepath string, service HandleService) (*Multipass, error) {
 		Basepath:      basepath,
 		Expires:       time.Hour * 24,
 		HandleService: service,
-		signer:        signer,
-		key:           pk,
 		tmpl:          tmpl,
 	}
 
@@ -134,8 +121,13 @@ func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
 			m.tmpl.ExecuteTemplate(w, "page", p)
 			return
 		}
+		pk := pemDecodePrivateKey([]byte(os.Getenv(PKENV)))
+		if pk == nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
 		var claims *Claims
-		if claims, err = validateToken(tokenStr, m.key.PublicKey); err != nil {
+		if claims, err = validateToken(tokenStr, pk.PublicKey); err != nil {
 			p.Page = tokenInvalidPage
 			if s := r.URL.Query().Get("url"); !strings.HasPrefix(s, m.Basepath) {
 				p.NextURL = s
@@ -243,7 +235,11 @@ func (m *Multipass) signoutHandler(w http.ResponseWriter, r *http.Request) {
 // publickeyHandler writes the public key to the given ResponseWriter to allow
 // other to validate Multipass signed tokens.
 func (m *Multipass) publickeyHandler(w http.ResponseWriter, r *http.Request) {
-	err := pemEncodePublicKey(w, &m.key.PublicKey)
+	pk := pemDecodePrivateKey([]byte(os.Getenv(PKENV)))
+	if pk == nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+	err := pemEncodePublicKey(w, &pk.PublicKey)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
@@ -258,7 +254,15 @@ func (m *Multipass) AccessToken(handle string) (tokenStr string, err error) {
 		Resources: m.Resources,
 		Expires:   time.Now().Add(m.Expires).Unix(),
 	}
-	return accessToken(m.signer, claims)
+	pk := pemDecodePrivateKey([]byte(os.Getenv(PKENV)))
+	if pk == nil {
+		return "", err
+	}
+	signer, err := jose.NewSigner(jose.PS512, pk)
+	if err != nil {
+		return "", err
+	}
+	return accessToken(signer, claims)
 }
 
 // NewLoginURL returns a login url which can be used as a time limited login.
@@ -281,7 +285,11 @@ func tokenHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 		return http.StatusUnauthorized, ErrInvalidToken
 	}
 	var claims *Claims
-	if claims, err = validateToken(tokenStr, m.key.PublicKey); err != nil {
+	pk := pemDecodePrivateKey([]byte(os.Getenv(PKENV)))
+	if pk == nil {
+		return http.StatusUnauthorized, ErrInvalidToken
+	}
+	if claims, err = validateToken(tokenStr, pk.PublicKey); err != nil {
 		return http.StatusUnauthorized, ErrInvalidToken
 	}
 	// Authorize handle claim
