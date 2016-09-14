@@ -7,10 +7,8 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
-	"encoding/json"
 	"encoding/pem"
 	"errors"
-	"fmt"
 	"html/template"
 	"io"
 	"log"
@@ -91,13 +89,6 @@ func NewMultipass(basepath string, service HandleService) (*Multipass, error) {
 	m.mux = mux
 
 	return m, nil
-}
-
-// Claims are part of the JSON web token
-type Claims struct {
-	Handle    string   `json:"handle"`
-	Resources []string `json:"resources"`
-	Expires   int64    `json:"exp"`
 }
 
 // ServeHTTP satisfies the ServeHTTP interface
@@ -274,19 +265,6 @@ func (m *Multipass) AccessToken(handle string) (tokenStr string, err error) {
 	return accessToken(m.signer, claims)
 }
 
-// accessToken return the serialized token given the signer and claims.
-func accessToken(signer jose.Signer, claims *Claims) (token string, err error) {
-	payload, err := json.Marshal(claims)
-	if err != nil {
-		return "", err
-	}
-	jws, err := signer.Sign(payload)
-	if err != nil {
-		return "", err
-	}
-	return jws.CompactSerialize()
-}
-
 // NewLoginURL returns a login url which can be used as a time limited login.
 // Optional values will be encoded in the login URL.
 func NewLoginURL(siteaddr, basepath, token string, v url.Values) (*url.URL, error) {
@@ -329,87 +307,4 @@ func tokenHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 	// Pass on authorized handle to downstream handlers
 	r.Header.Set("Multipass-Handle", claims.Handle)
 	return http.StatusOK, nil
-}
-
-// extractToken returns the JWT token embedded in the given request.
-// JWT tokens can be embedded in the header prefixed with "Bearer ", with a
-// "token" key query parameter or a cookie named "jwt_token".
-func extractToken(r *http.Request) (string, error) {
-	//from header
-	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
-		if len(h) > 7 {
-			return h[7:], nil
-		}
-	}
-
-	//from query parameter
-	if token := r.URL.Query().Get("token"); len(token) > 0 {
-		return token, nil
-	}
-
-	//from cookie
-	if cookie, err := r.Cookie("jwt_token"); err == nil {
-		return cookie.Value, nil
-	}
-
-	return "", fmt.Errorf("no token found")
-}
-
-func validateToken(token string, key rsa.PublicKey) (*Claims, error) {
-	claims := &Claims{}
-
-	// Verify token signature
-	payload, err := verifyToken(token, key)
-	if err != nil {
-		return nil, err
-	}
-	// Unmarshal token claims
-	if err := json.Unmarshal(payload, claims); err != nil {
-		return nil, err
-	}
-	// Verify expire claim
-	if time.Unix(claims.Expires, 0).Before(time.Now()) {
-		return nil, errors.New("Token expired")
-	}
-	return claims, nil
-}
-
-// verifyToken returns the payload of the given token when the signature
-// can be verified using the given public key.
-func verifyToken(token string, key rsa.PublicKey) ([]byte, error) {
-	var data []byte
-
-	obj, err := jose.ParseSigned(token)
-	if err != nil {
-		return data, err
-	}
-	data, err = obj.Verify(&key)
-	if err != nil {
-		return data, err
-	}
-	return data, nil
-}
-
-// A HandleService is an interface used by a Multipass instance to register,
-// list user handles and notify users about requested access tokens.
-// A handle is a unique user identifier, e.g. email address.
-type HandleService interface {
-	// Register returns nil when the given handle is accepted for
-	// registration with the service.
-	// The handle is passed on by the Multipass instance and can represent
-	// an username, email address or even an URI representing a connection to
-	// a datastore. The latter allows the HandleService to be associated
-	// with a RDBMS from which to verify listed users.
-	Register(handle string) error
-
-	// Listed returns true when the given handle is listed with the
-	// service.
-	Listed(handle string) bool
-
-	// Notify returns nil when the given login URL is succesfully
-	// communicated to the given handle.
-	Notify(handle, loginurl string) error
-
-	// Close closes any open connections.
-	Close() error
 }
