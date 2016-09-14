@@ -13,6 +13,8 @@ import (
 
 	"github.com/mholt/caddy"
 	"github.com/mholt/caddy/caddyhttp/httpserver"
+	"github.com/namsral/multipass"
+	"github.com/namsral/multipass/services/email"
 )
 
 const directive = "multipass"
@@ -31,36 +33,64 @@ func setup(c *caddy.Controller) error {
 		return nil
 	})
 
-	rules, err := multipassParse(c)
+	rules, err := parse(c)
 	if err != nil {
 		return err
 	}
 	if len(rules) == 0 {
 		return errors.New("No directive declared")
 	}
+	rule := rules[0]
 
-	multipass, err := NewMultipassRule(rules[0])
+	m, err := multipass.NewMultipass(cfg.Addr.String())
 	if err != nil {
 		return err
 	}
+	if p := rule.BasePath; len(p) > 0 {
+		m.SetBasePath(rule.BasePath)
+	}
 
-	multipass.SiteAddr = cfg.Addr.String()
+	// Create a HandleService
+	opt := &email.HandleOptions{
+		rule.SMTPAddr,
+		rule.SMTPUser,
+		rule.SMTPPass,
+		rule.MailFrom,
+	}
+	service, err := email.NewHandleService(opt)
+	if err != nil {
+		return err
+	}
+	for _, handle := range rule.Handles {
+		service.Register(handle)
+	}
+	m.SetHandleService(service)
+
+	if len(rule.Resources) > 0 {
+		m.Resources = rule.Resources
+	}
+	if rule.Expires > 0 {
+		m.Expires = rule.Expires
+	}
+
 	mid := func(next httpserver.Handler) httpserver.Handler {
 		return &Auth{
-			Multipass: multipass,
+			Multipass: m,
 			Next:      next,
 		}
 	}
 	cfg.AddMiddleware(mid)
 
 	c.OnShutdown(func() error {
-		return multipass.HandleService.Close()
+		//TODO: Fix close method on private field
+		// return multipass.HandleService.Close()
+		return nil
 	})
 
 	return nil
 }
 
-func multipassParse(c *caddy.Controller) ([]Rule, error) {
+func parse(c *caddy.Controller) ([]Rule, error) {
 	var rules []Rule
 	for c.Next() {
 		var rule Rule
@@ -76,7 +106,7 @@ func multipassParse(c *caddy.Controller) ([]Rule, error) {
 					if len(args) != 1 {
 						return rules, c.Err("Expecting a single basepath")
 					}
-					rule.Basepath = args[0]
+					rule.BasePath = args[0]
 				case "handles":
 					args := c.RemainingArgs()
 					if len(args) <= 0 {

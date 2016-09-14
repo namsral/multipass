@@ -29,29 +29,23 @@ var (
 // authentication and authorization of users and resources using signed JWT.
 type Multipass struct {
 	Resources []string
-	Basepath  string
-	SiteAddr  string
 	Expires   time.Duration
 
-	HandleService
-
-	tmpl *template.Template
-	mux  *http.ServeMux
+	basepath string
+	siteaddr string
+	service  HandleService
+	tmpl     *template.Template
+	mux      *http.ServeMux
 }
 
 // NewMultipass returns a new instance of Multipass with reasonalble defaults:
 // 2048 bit RSA key pair, `/multipass` basepath a token expiration time of
 // 24 hours.
-func NewMultipass(basepath string, service HandleService) (*Multipass, error) {
-	// Absolute the given basepath or set a default
-	if len(basepath) > 0 {
-		basepath = path.Join("/", basepath)
-	} else {
-		basepath = "/multipass"
-	}
-
+func NewMultipass(siteaddr string) (*Multipass, error) {
 	// Generate and set a private key if none is set
-	if k := pemDecodePrivateKey([]byte(os.Getenv(PKENV))); k == nil {
+	if k := pemDecodePrivateKey([]byte(os.Getenv(PKENV))); k != nil {
+		log.Printf("Use private key from enviroment variable named by key %s\n", PKENV)
+	} else {
 		pk, err := rsa.GenerateKey(rand.Reader, 2048)
 		if err != nil {
 			return nil, err
@@ -70,23 +64,48 @@ func NewMultipass(basepath string, service HandleService) (*Multipass, error) {
 	}
 
 	m := &Multipass{
-		Resources:     []string{"/"},
-		Basepath:      basepath,
-		Expires:       time.Hour * 24,
-		HandleService: service,
-		tmpl:          tmpl,
+		Resources: []string{"/"},
+		Expires:   time.Hour * 24,
+		basepath:  "/multipass",
+		siteaddr:  siteaddr,
+		service:   DefaultHandleService,
+		tmpl:      tmpl,
 	}
 
 	// Create the router
 	mux := http.NewServeMux()
-	mux.HandleFunc(path.Join(basepath, "/"), m.rootHandler)
-	mux.HandleFunc(path.Join(basepath, "/login"), m.loginHandler)
-	mux.HandleFunc(path.Join(basepath, "/confirm"), m.confirmHandler)
-	mux.HandleFunc(path.Join(basepath, "/signout"), m.signoutHandler)
-	mux.HandleFunc(path.Join(basepath, "/pub.cer"), m.publickeyHandler)
+	mux.HandleFunc(path.Join(m.basepath, "/"), m.rootHandler)
+	mux.HandleFunc(path.Join(m.basepath, "/login"), m.loginHandler)
+	mux.HandleFunc(path.Join(m.basepath, "/confirm"), m.confirmHandler)
+	mux.HandleFunc(path.Join(m.basepath, "/signout"), m.signoutHandler)
+	mux.HandleFunc(path.Join(m.basepath, "/pub.cer"), m.publickeyHandler)
 	m.mux = mux
 
 	return m, nil
+}
+
+// BasePath return the base path.
+func (m *Multipass) BasePath() string {
+	return m.basepath
+}
+
+// SetBasePath overrides the default base path of `/multipass`.
+// The given basepath is made absolute before it is set.
+func (m *Multipass) SetBasePath(basepath string) {
+	p := path.Clean(basepath)
+	if len(p) == 0 {
+		return
+	}
+	if p[len(p)-1] != '/' {
+		m.basepath = path.Join("/", p)
+		return
+	}
+	m.basepath = p
+}
+
+// SetHandleService overrides the default HandleService.
+func (m *Multipass) SetHandleService(s HandleService) {
+	m.service = s
 }
 
 // ServeHTTP satisfies the ServeHTTP interface
@@ -108,14 +127,14 @@ func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
 		// Regular login page
 		p := &page{
 			Page:        loginPage,
-			LoginPath:   path.Join(m.Basepath, "login"),
-			SignoutPath: path.Join(m.Basepath, "signout"),
+			LoginPath:   path.Join(m.basepath, "login"),
+			SignoutPath: path.Join(m.basepath, "signout"),
 		}
 
 		// Show login page when there is no token
 		tokenStr, err := extractToken(r)
 		if err != nil {
-			if s := r.URL.Query().Get("url"); !strings.HasPrefix(s, m.Basepath) {
+			if s := r.URL.Query().Get("url"); !strings.HasPrefix(s, m.basepath) {
 				p.NextURL = s
 			}
 			m.tmpl.ExecuteTemplate(w, "page", p)
@@ -129,14 +148,14 @@ func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
 		var claims *Claims
 		if claims, err = validateToken(tokenStr, pk.PublicKey); err != nil {
 			p.Page = tokenInvalidPage
-			if s := r.URL.Query().Get("url"); !strings.HasPrefix(s, m.Basepath) {
+			if s := r.URL.Query().Get("url"); !strings.HasPrefix(s, m.basepath) {
 				p.NextURL = s
 			}
 			m.tmpl.ExecuteTemplate(w, "page", p)
 			return
 		}
 		// Authorize handle claim
-		if ok := m.HandleService.Listed(claims.Handle); !ok {
+		if ok := m.service.Listed(claims.Handle); !ok {
 			p.Page = tokenInvalidPage
 			m.tmpl.ExecuteTemplate(w, "page", p)
 			return
@@ -169,14 +188,14 @@ func (m *Multipass) loginHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			http.SetCookie(w, cookie)
 		}
-		http.Redirect(w, r, m.Basepath, http.StatusSeeOther)
+		http.Redirect(w, r, m.basepath, http.StatusSeeOther)
 		return
 	}
 	if r.Method == "POST" {
 		r.ParseForm()
 		handle := r.PostForm.Get("handle")
 		if len(handle) > 0 {
-			if m.HandleService.Listed(handle) {
+			if m.service.Listed(handle) {
 				token, err := m.AccessToken(handle)
 				if err != nil {
 					log.Print(err)
@@ -185,20 +204,20 @@ func (m *Multipass) loginHandler(w http.ResponseWriter, r *http.Request) {
 				if s := r.PostForm.Get("url"); len(s) > 0 {
 					values.Set("url", s)
 				}
-				loginURL, err := NewLoginURL(m.SiteAddr, m.Basepath, token, values)
+				loginURL, err := NewLoginURL(m.siteaddr, m.basepath, token, values)
 				if err != nil {
 					log.Print(err)
 				}
-				if err := m.HandleService.Notify(handle, loginURL.String()); err != nil {
+				if err := m.service.Notify(handle, loginURL.String()); err != nil {
 					log.Print(err)
 				}
 			}
 			// Redirect even when the handle is not listed in order to prevent guessing
-			location := path.Join(m.Basepath, "confirm")
+			location := path.Join(m.basepath, "confirm")
 			http.Redirect(w, r, location, http.StatusSeeOther)
 			return
 		}
-		http.Redirect(w, r, m.Basepath, http.StatusSeeOther)
+		http.Redirect(w, r, m.basepath, http.StatusSeeOther)
 		return
 	}
 	w.WriteHeader(http.StatusMethodNotAllowed)
@@ -226,7 +245,7 @@ func (m *Multipass) signoutHandler(w http.ResponseWriter, r *http.Request) {
 			cookie.Path = "/"
 			http.SetCookie(w, cookie)
 		}
-		http.Redirect(w, r, m.Basepath, http.StatusSeeOther)
+		http.Redirect(w, r, m.basepath, http.StatusSeeOther)
 		return
 	}
 	w.WriteHeader(http.StatusMethodNotAllowed)
@@ -278,7 +297,8 @@ func NewLoginURL(siteaddr, basepath, token string, v url.Values) (*url.URL, erro
 	return u, nil
 }
 
-func tokenHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
+// TokenHandler validates the token in the request before it writes the response.
+func TokenHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
 	// Extract token from HTTP header, query parameter or cookie
 	tokenStr, err := extractToken(r)
 	if err != nil {
@@ -293,7 +313,7 @@ func tokenHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 		return http.StatusUnauthorized, ErrInvalidToken
 	}
 	// Authorize handle claim
-	if ok := m.HandleService.Listed(claims.Handle); !ok {
+	if ok := m.service.Listed(claims.Handle); !ok {
 		return http.StatusUnauthorized, ErrInvalidToken
 	}
 	// Verify path claim

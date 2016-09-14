@@ -89,16 +89,17 @@ func (h downstreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) (in
 }
 
 func TestTokenHandler(t *testing.T) {
-	service := &TestHandleService{}
-	m, err := NewMultipass("", service)
+	m, err := NewMultipass("")
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	service := &TestHandleService{}
 	handles := []string{"leeloo@dallas", "korben@dallas", "ruby@rhod"}
 	for _, handle := range handles[:len(handles)-1] {
-		m.HandleService.Register(handle)
+		service.Register(handle)
 	}
+	m.SetHandleService(service)
 
 	m.Resources = []string{"/private"}
 	token, err := m.AccessToken(handles[0])
@@ -166,7 +167,7 @@ func TestTokenHandler(t *testing.T) {
 			URL:    &url.URL{Path: test.path},
 			Header: test.header,
 		}
-		status, err := tokenHandler(record, req, m)
+		status, err := TokenHandler(record, req, m)
 		if actual, expect := status, test.status; actual != expect {
 			t.Errorf("test #%d; expect status %d, got %d", i, expect, actual)
 		}
@@ -189,16 +190,17 @@ func TestTokenHandler(t *testing.T) {
 }
 
 func TestMultipassHandlers(t *testing.T) {
-	service := &TestHandleService{}
-	m, err := NewMultipass("", service)
+	m, err := NewMultipass("")
 	if err != nil {
 		t.Fatal(err)
 	}
 	m.Resources = []string{"/private"}
+	service := &TestHandleService{}
 	handles := []string{"leeloo@dallas", "korben@dallas", "ruby@rhod"}
 	for _, handle := range handles[:len(handles)-1] {
-		m.HandleService.Register(handle)
+		service.Register(handle)
 	}
+	m.SetHandleService(service)
 
 	token, err := m.AccessToken(handles[0])
 	if err != nil {
