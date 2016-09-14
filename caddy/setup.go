@@ -7,7 +7,6 @@ package multipass
 // source: github.com/mholt/caddy/caddyhttp/httpserver/plugin.go
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -34,11 +33,8 @@ func setup(c *caddy.Controller) error {
 	})
 
 	rules, err := parse(c)
-	if err != nil {
-		return err
-	}
-	if len(rules) == 0 {
-		return errors.New("No directive declared")
+	if err != nil || len(rules) != 1 {
+		return c.Err("invalid directive")
 	}
 	rule := rules[0]
 
