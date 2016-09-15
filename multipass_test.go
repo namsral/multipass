@@ -99,7 +99,7 @@ func TestTokenHandler(t *testing.T) {
 	for _, handle := range handles[:len(handles)-1] {
 		service.Register(handle)
 	}
-	m.SetHandleService(service)
+	m.SetUserService(service)
 
 	m.Resources = []string{"/private"}
 	token, err := m.AccessToken(handles[0])
@@ -200,7 +200,7 @@ func TestMultipassHandlers(t *testing.T) {
 	for _, handle := range handles[:len(handles)-1] {
 		service.Register(handle)
 	}
-	m.SetHandleService(service)
+	m.SetUserService(service)
 
 	token, err := m.AccessToken(handles[0])
 	if err != nil {

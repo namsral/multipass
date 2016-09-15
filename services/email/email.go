@@ -47,9 +47,9 @@ Multipass Bot
 {{ end }}
 `
 
-// HandleService implements the HandleService interface. Handles are interperted
+// UserService implements the UserService interface. Handles are interperted
 // as email addresses.
-type HandleService struct {
+type UserService struct {
 	from     *mail.Address
 	Template *template.Template
 
@@ -60,14 +60,14 @@ type HandleService struct {
 	dialer  *gomail.Dialer
 }
 
-// HandleOptions is used to construct a new HandleService using the
-// NewHandleService function.
-type HandleOptions struct {
+// Options is used to construct a new UserService using the
+// NewUserService function.
+type Options struct {
 	Addr, Username, Password, FromAddr string
 }
 
-// NewHandleService returns a new HandleService instance with the given options.
-func NewHandleService(opt *HandleOptions) (*HandleService, error) {
+// NewUserService returns a new UserService instance with the given options.
+func NewUserService(opt *Options) (*UserService, error) {
 	host := "localhost"
 	port := "25"
 	if len(opt.Addr) > 0 {
@@ -121,7 +121,7 @@ func NewHandleService(opt *HandleOptions) (*HandleService, error) {
 		}
 	}()
 
-	s := &HandleService{
+	s := &UserService{
 		from:     from,
 		Template: t,
 		channel:  c,
@@ -132,7 +132,7 @@ func NewHandleService(opt *HandleOptions) (*HandleService, error) {
 }
 
 // Register returns nil when the given address is valid.
-func (s *HandleService) Register(handle string) error {
+func (s *UserService) Register(handle string) error {
 	a, err := mail.ParseAddress(handle)
 	if err != nil {
 		return err
@@ -144,7 +144,7 @@ func (s *HandleService) Register(handle string) error {
 }
 
 // Listed return true when the given address is listed.
-func (s *HandleService) Listed(handle string) bool {
+func (s *UserService) Listed(handle string) bool {
 	a, err := mail.ParseAddress(handle)
 	if err != nil {
 		return false
@@ -162,7 +162,7 @@ func (s *HandleService) Listed(handle string) bool {
 
 // Notify returns nil when the given login URL is succesfully sent to the given
 // email address.
-func (s *HandleService) Notify(handle, loginurl string) error {
+func (s *UserService) Notify(handle, loginurl string) error {
 	toAddr, err := mail.ParseAddress(handle)
 	if err != nil {
 		return err
@@ -192,7 +192,7 @@ func (s *HandleService) Notify(handle, loginurl string) error {
 }
 
 // Close closes the channel to send mail messages.
-func (s *HandleService) Close() error {
+func (s *UserService) Close() error {
 	close(s.channel)
 	return nil
 }

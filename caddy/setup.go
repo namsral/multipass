@@ -46,21 +46,21 @@ func setup(c *caddy.Controller) error {
 		m.SetBasePath(rule.BasePath)
 	}
 
-	// Create a HandleService
-	opt := &email.HandleOptions{
+	// Create a UserService
+	opt := &email.Options{
 		rule.SMTPAddr,
 		rule.SMTPUser,
 		rule.SMTPPass,
 		rule.MailFrom,
 	}
-	service, err := email.NewHandleService(opt)
+	service, err := email.NewUserService(opt)
 	if err != nil {
 		return err
 	}
 	for _, handle := range rule.Handles {
 		service.Register(handle)
 	}
-	m.SetHandleService(service)
+	m.SetUserService(service)
 
 	if len(rule.Resources) > 0 {
 		m.Resources = rule.Resources
@@ -79,7 +79,7 @@ func setup(c *caddy.Controller) error {
 
 	c.OnShutdown(func() error {
 		//TODO: Fix close method on private field
-		// return multipass.HandleService.Close()
+		// return multipass.UserService.Close()
 		return nil
 	})
 

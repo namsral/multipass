@@ -17,6 +17,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/namsral/multipass/services/io"
+
 	jose "gopkg.in/square/go-jose.v1"
 )
 
@@ -24,6 +26,9 @@ import (
 var (
 	ErrInvalidToken = errors.New("invalid token")
 )
+
+// DefaultUserService is the default UserService used by Multipass.
+var DefaultUserService = io.NewUserService(os.Stdout)
 
 // Multipass implements the http.Handler interface which can handle
 // authentication and authorization of users and resources using signed JWT.
@@ -33,7 +38,7 @@ type Multipass struct {
 
 	basepath string
 	siteaddr string
-	service  HandleService
+	service  UserService
 	tmpl     *template.Template
 }
 
@@ -67,7 +72,7 @@ func NewMultipass(siteaddr string) (*Multipass, error) {
 		Expires:   time.Hour * 24,
 		basepath:  "/multipass",
 		siteaddr:  siteaddr,
-		service:   DefaultHandleService,
+		service:   DefaultUserService,
 		tmpl:      tmpl,
 	}
 
@@ -93,8 +98,8 @@ func (m *Multipass) SetBasePath(basepath string) {
 	m.basepath = p
 }
 
-// SetHandleService overrides the default HandleService.
-func (m *Multipass) SetHandleService(s HandleService) {
+// SetUserService overrides the default UserService.
+func (m *Multipass) SetUserService(s UserService) {
 	m.service = s
 }
 
@@ -336,4 +341,28 @@ func TokenHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, er
 	// Pass on authorized handle to downstream handlers
 	r.Header.Set("Multipass-Handle", claims.Handle)
 	return http.StatusOK, nil
+}
+
+// A UserService is an interface used by a Multipass instance to register,
+// list user handles and notify users about requested access tokens.
+// A handle is a unique user identifier, e.g. email address.
+type UserService interface {
+	// Register returns nil when the given handle is accepted for
+	// registration with the service.
+	// The handle is passed on by the Multipass instance and can represent
+	// an username, email address or even an URI representing a connection to
+	// a datastore. The latter allows the UserService to be associated
+	// with a RDBMS from which to verify listed users.
+	Register(handle string) error
+
+	// Listed returns true when the given handle is listed with the
+	// service.
+	Listed(handle string) bool
+
+	// Notify returns nil when the given login URL is succesfully
+	// communicated to the given handle.
+	Notify(handle, loginurl string) error
+
+	// Close closes any open connections.
+	Close() error
 }
