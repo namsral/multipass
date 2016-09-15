@@ -18,25 +18,25 @@ type UserService struct {
 	CloseInvoked bool
 }
 
-// Register invokes the mock Implementation and marks the function as invoked.
+// Register invokes the mock implementation and marks the function as invoked.
 func (s *UserService) Register(handle string) error {
 	s.RegisterInvoked = true
 	return s.RegisterFn(handle)
 }
 
-// Listed invokes the mock Implementation and marks the function as invoked.
+// Listed invokes the mock implementation and marks the function as invoked.
 func (s *UserService) Listed(handle string) bool {
 	s.ListedInvoked = true
 	return s.ListedFn(handle)
 }
 
-// Notify invokes the mock Implementation and marks the function as invoked.
+// Notify invokes the mock implementation and marks the function as invoked.
 func (s *UserService) Notify(handle, loginurl string) error {
 	s.NotifyInvoked = true
 	return s.NotifyFn(handle)
 }
 
-// Close invokes the mock Implementation and marks the function as invoked.
+// Close invokes the mock implementation and marks the function as invoked.
 func (s *UserService) Close() error {
 	s.CloseInvoked = true
 	return s.CloseFn(handle)
