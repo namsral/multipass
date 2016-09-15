@@ -11,6 +11,9 @@ type UserService struct {
 	ListedFn      func(handle string) error
 	ListedInvoked bool
 
+	AuthorizedFn      func(handle, rawurl string) bool
+	AuthorizedInvoked bool
+
 	Notify        func(handle, loginurl string) error
 	NotifyInvoked bool
 
@@ -34,6 +37,12 @@ func (s *UserService) Listed(handle string) bool {
 func (s *UserService) Notify(handle, loginurl string) error {
 	s.NotifyInvoked = true
 	return s.NotifyFn(handle)
+}
+
+// Authorized invokes the mock implementation and marks the function as invoked.
+func (s *UserService) Authorized(handle, rawurl string) bool {
+	s.AuthorizedInvoked = true
+	return s.AuthorizedFn(handle, rawurl)
 }
 
 // Close invokes the mock implementation and marks the function as invoked.

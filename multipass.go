@@ -359,6 +359,10 @@ type UserService interface {
 	// service.
 	Listed(handle string) bool
 
+	// Authorized returns true when the user identified by the given handle is
+	// authorized to access the given resource at rawurl.
+	Authorized(handle, rawurl string) bool
+
 	// Notify returns nil when the given login URL is succesfully
 	// communicated to the given handle.
 	Notify(handle, loginurl string) error

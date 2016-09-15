@@ -4,6 +4,7 @@
 package email
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -47,14 +48,20 @@ Multipass Bot
 {{ end }}
 `
 
+// Portable errors
+var (
+	ErrInvalidPattern = errors.New("invalid pattern")
+)
+
 // UserService implements the UserService interface. Handles are interperted
 // as email addresses.
 type UserService struct {
 	from     *mail.Address
-	Template *template.Template
+	template *template.Template
 
-	lock    sync.Mutex
-	handles []string
+	lock     sync.Mutex
+	handles  []string
+	patterns []string
 
 	channel chan *gomail.Message
 	dialer  *gomail.Dialer
@@ -64,10 +71,12 @@ type UserService struct {
 // NewUserService function.
 type Options struct {
 	Addr, Username, Password, FromAddr string
+	Patterns                           []string
 }
 
 // NewUserService returns a new UserService instance with the given options.
 func NewUserService(opt *Options) (*UserService, error) {
+	s := &UserService{}
 	host := "localhost"
 	port := "25"
 	if len(opt.Addr) > 0 {
@@ -78,18 +87,28 @@ func NewUserService(opt *Options) (*UserService, error) {
 		port = p
 	}
 
+	for _, pattern := range opt.Patterns {
+		if err := s.AddPattern(pattern); err != nil {
+			return nil, err
+		}
+	}
+
 	from, err := mail.ParseAddress(opt.FromAddr)
 	if err != nil {
 		return nil, err
 	}
+	s.from = from
 
-	t := template.Must(template.New("").Parse(msgTmpl))
+	s.template = template.Must(template.New("").Parse(msgTmpl))
+
 	c := make(chan *gomail.Message)
+	s.channel = c
 	p, err := strconv.Atoi(port)
 	if err != nil {
 		return nil, err
 	}
 	d := gomail.NewDialer(host, p, opt.Username, opt.Password)
+	s.dialer = d
 
 	go func() {
 		var s gomail.SendCloser
@@ -121,14 +140,23 @@ func NewUserService(opt *Options) (*UserService, error) {
 		}
 	}()
 
-	s := &UserService{
-		from:     from,
-		Template: t,
-		channel:  c,
-		dialer:   d,
-	}
-
 	return s, nil
+}
+
+// AddPattern adds the given pattern user accessible resources.
+func (s *UserService) AddPattern(pattern string) error {
+	s.lock.Lock()
+	n := len(pattern)
+	if n == 0 {
+		return ErrInvalidPattern
+	}
+	// If pattern is /tree/, insert a pattern for /tree
+	if pattern[n-1] == '/' {
+		s.patterns = append(s.patterns, pattern[:n-1])
+	}
+	s.patterns = append(s.patterns, pattern)
+	s.lock.Unlock()
+	return nil
 }
 
 // Register returns nil when the given address is valid.
@@ -160,6 +188,27 @@ func (s *UserService) Listed(handle string) bool {
 	return false
 }
 
+// Authorized return true when a user identified with the given handle is
+// authorized to access the resource at the given rawurl.
+func (s *UserService) Authorized(handle, rawurl string) bool {
+	if !s.Listed(handle) {
+		return false
+	}
+	if rawurl == "" {
+		return false
+	}
+	if rawurl[0] != '/' {
+		return false
+	}
+
+	for _, pattern := range s.patterns {
+		if pathMatch(pattern, rawurl) {
+			return true
+		}
+	}
+	return false
+}
+
 // Notify returns nil when the given login URL is succesfully sent to the given
 // email address.
 func (s *UserService) Notify(handle, loginurl string) error {
@@ -177,12 +226,12 @@ func (s *UserService) Notify(handle, loginurl string) error {
 
 	data := struct{ LoginURL string }{LoginURL: loginurl}
 	if m.AddAlternativeWriter("text/plain", func(w io.Writer) error {
-		return s.Template.ExecuteTemplate(w, "text/plain", data)
+		return s.template.ExecuteTemplate(w, "text/plain", data)
 	}); err != nil {
 		return err
 	}
 	if m.AddAlternativeWriter("text/html", func(w io.Writer) error {
-		return s.Template.ExecuteTemplate(w, "text/html", data)
+		return s.template.ExecuteTemplate(w, "text/html", data)
 	}); err != nil {
 		return err
 	}
@@ -195,4 +244,18 @@ func (s *UserService) Notify(handle, loginurl string) error {
 func (s *UserService) Close() error {
 	close(s.channel)
 	return nil
+}
+
+// pathMatch return true when the given pattern matches the given path. It
+// works on root and non root subtrees.
+func pathMatch(pattern, path string) bool {
+	n := len(pattern)
+	if n == 0 {
+		// should not happen
+		return false
+	}
+	if pattern[n-1] != '/' {
+		return pattern == path
+	}
+	return len(path) >= n && path[0:n] == pattern
 }

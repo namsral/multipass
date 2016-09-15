@@ -42,6 +42,17 @@ func (s *UserService) Listed(handle string) bool {
 	return len(handle) > 0
 }
 
+// Authorized implements the multipass.UserService.Authorized method. It writes
+// the given arguments to the UserService's writer element followed by a
+// newline character.
+func (s *UserService) Authorized(handle, rawurl string) bool {
+	s.lock.Lock()
+	fmt.Fprintln(s.writer, handle)
+	fmt.Fprintln(s.writer, rawurl)
+	s.lock.Unlock()
+	return true
+}
+
 // Notify implements the multipass.UserService.Notify method. It writes
 // the given arguments to the UserService's writer element followed by a
 // newline character.
