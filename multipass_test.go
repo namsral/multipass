@@ -13,9 +13,10 @@ import (
 	"net/url"
 	"reflect"
 	"strings"
-	"sync"
 	"testing"
 	"time"
+
+	"github.com/namsral/multipass/mock"
 
 	jose "gopkg.in/square/go-jose.v1"
 )
@@ -30,41 +31,6 @@ func newSignerAndPublicKey(t *testing.T) (jose.Signer, rsa.PublicKey) {
 		t.Fatal(err)
 	}
 	return signer, pk.PublicKey
-}
-
-type TestHandleService struct {
-	handle, loginurl string
-	lock             sync.Mutex
-	list             []string
-}
-
-func (s *TestHandleService) Register(handle string) error {
-	s.lock.Lock()
-	s.list = append(s.list, handle)
-	s.lock.Unlock()
-	return nil
-}
-
-func (s *TestHandleService) Listed(handle string) bool {
-	s.lock.Lock()
-	for _, e := range s.list {
-		if e == handle {
-			s.lock.Unlock()
-			return true
-		}
-	}
-	s.lock.Unlock()
-	return false
-}
-
-func (s *TestHandleService) Notify(handle, loginurl string) error {
-	s.handle = handle
-	s.loginurl = loginurl
-	return nil
-}
-
-func (s *TestHandleService) Close() error {
-	return nil
 }
 
 type downstreamHandler struct {
@@ -94,14 +60,30 @@ func TestTokenHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	service := &TestHandleService{}
 	handles := []string{"leeloo@dallas", "korben@dallas", "ruby@rhod"}
-	for _, handle := range handles[:len(handles)-1] {
-		service.Register(handle)
+	service := &mock.UserService{}
+	service.NotifyFn = func(handle, loginurl string) error {
+		return nil
+	}
+	service.ListedFn = func(handle string) bool {
+		if handle == handles[len(handles)-1] {
+			return false
+		}
+		for _, h := range handles[:len(handles)-1] {
+			if h == handle {
+				return true
+			}
+		}
+		return false
+	}
+	service.AuthorizedFn = func(handle, rawurl string) bool {
+		if service.Listed(handle) && rawurl == "/private" {
+			return true
+		}
+		return false
 	}
 	m.SetUserService(service)
 
-	m.Resources = []string{"/private"}
 	token, err := m.AccessToken(handles[0])
 	if err != nil {
 		t.Fatal(err)
@@ -140,8 +122,8 @@ func TestTokenHandler(t *testing.T) {
 			method: "GET",
 			path:   "/private",
 			header: http.Header{"Cookie": []string{fmt.Sprint(&http.Cookie{Name: "jwt_token", Value: unregisteredHandleToken, Path: "//"})}},
-			status: http.StatusUnauthorized,
-			err:    ErrInvalidToken,
+			status: http.StatusForbidden,
+			err:    ErrForbidden,
 		},
 		{
 			desc:   "request with token forbidden resource",
@@ -167,7 +149,7 @@ func TestTokenHandler(t *testing.T) {
 			URL:    &url.URL{Path: test.path},
 			Header: test.header,
 		}
-		status, err := TokenHandler(record, req, m)
+		status, err := ResourceHandler(record, req, m)
 		if actual, expect := status, test.status; actual != expect {
 			t.Errorf("test #%d; expect status %d, got %d", i, expect, actual)
 		}
@@ -194,11 +176,30 @@ func TestMultipassHandlers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m.Resources = []string{"/private"}
-	service := &TestHandleService{}
 	handles := []string{"leeloo@dallas", "korben@dallas", "ruby@rhod"}
-	for _, handle := range handles[:len(handles)-1] {
-		service.Register(handle)
+	service := &mock.UserService{}
+	service.NotifyFn = func(handle, loginurl string) error {
+		return nil
+	}
+	service.ListedFn = func(handle string) bool {
+		if handle == handles[len(handles)-1] {
+			return false
+		}
+		for _, h := range handles[:len(handles)-1] {
+			if h == handle {
+				return true
+			}
+		}
+		return false
+	}
+	service.AuthorizedFn = func(handle, rawurl string) bool {
+		if !service.Listed(handle) {
+			return false
+		}
+		if rawurl == "/private" {
+			return true
+		}
+		return false
 	}
 	m.SetUserService(service)
 
