@@ -52,6 +52,7 @@ func setup(c *caddy.Controller) error {
 		rule.SMTPUser,
 		rule.SMTPPass,
 		rule.MailFrom,
+		rule.Resources,
 	}
 	service, err := email.NewUserService(opt)
 	if err != nil {
@@ -62,9 +63,6 @@ func setup(c *caddy.Controller) error {
 	}
 	m.SetUserService(service)
 
-	if len(rule.Resources) > 0 {
-		m.Resources = rule.Resources
-	}
 	if rule.Expires > 0 {
 		m.Expires = rule.Expires
 	}

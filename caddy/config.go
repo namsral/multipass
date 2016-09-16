@@ -27,20 +27,16 @@ func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 		return 200, nil
 	}
 
-	for _, path := range m.Resources {
-		if httpserver.Path(r.URL.Path).Matches(path) {
-			if _, err := multipass.TokenHandler(w, r, m); err != nil {
-				u, err := url.Parse(m.BasePath())
-				if err != nil {
-					return http.StatusInternalServerError, nil
-				}
-				v := url.Values{}
-				v.Set("url", r.URL.String())
-				u.RawQuery = v.Encode()
-				http.Redirect(w, r, u.String(), http.StatusSeeOther)
-				return http.StatusSeeOther, nil
-			}
+	if _, err := multipass.ResourceHandler(w, r, m); err != nil {
+		u, err := url.Parse(m.BasePath())
+		if err != nil {
+			return http.StatusInternalServerError, nil
 		}
+		v := url.Values{}
+		v.Set("url", r.URL.String())
+		u.RawQuery = v.Encode()
+		http.Redirect(w, r, u.String(), http.StatusSeeOther)
+		return http.StatusSeeOther, nil
 	}
 
 	return a.Next.ServeHTTP(w, r)
