@@ -25,6 +25,7 @@ import (
 // Portable errors
 var (
 	ErrInvalidToken = errors.New("invalid token")
+	ErrForbidden    = errors.New(http.StatusText(http.StatusForbidden))
 )
 
 // DefaultUserService is the default UserService used by Multipass.
@@ -33,8 +34,7 @@ var DefaultUserService = io.NewUserService(os.Stdout)
 // Multipass implements the http.Handler interface which can handle
 // authentication and authorization of users and resources using signed JWT.
 type Multipass struct {
-	Resources []string
-	Expires   time.Duration
+	Expires time.Duration
 
 	basepath string
 	siteaddr string
@@ -68,12 +68,11 @@ func NewMultipass(siteaddr string) (*Multipass, error) {
 	}
 
 	m := &Multipass{
-		Resources: []string{"/"},
-		Expires:   time.Hour * 24,
-		basepath:  "/multipass",
-		siteaddr:  siteaddr,
-		service:   DefaultUserService,
-		tmpl:      tmpl,
+		Expires:  time.Hour * 24,
+		basepath: "/multipass",
+		siteaddr: siteaddr,
+		service:  DefaultUserService,
+		tmpl:     tmpl,
 	}
 
 	return m, nil
@@ -279,9 +278,8 @@ func (m *Multipass) publicKeyHandler(w http.ResponseWriter, r *http.Request) {
 // as a claim.
 func (m *Multipass) AccessToken(handle string) (tokenStr string, err error) {
 	claims := &Claims{
-		Handle:    handle,
-		Resources: m.Resources,
-		Expires:   time.Now().Add(m.Expires).Unix(),
+		Handle:  handle,
+		Expires: time.Now().Add(m.Expires).Unix(),
 	}
 	pk := pemDecodePrivateKey([]byte(os.Getenv(PKENV)))
 	if pk == nil {
@@ -307,37 +305,28 @@ func NewLoginURL(siteaddr, basepath, token string, v url.Values) (*url.URL, erro
 	return u, nil
 }
 
-// TokenHandler validates the token in the request before it writes the response.
-func TokenHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
-	// Extract token from HTTP header, query parameter or cookie
+// ResourceHandler validates the token in the request before it writes the response.
+func ResourceHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
 	tokenStr, err := extractToken(r)
 	if err != nil {
+		if ok := m.service.Authorized("", r.URL.String()); ok {
+			return http.StatusOK, nil
+		}
+		w.Header().Set("Www-Authenticate", "Bearer token_type=\"JWT\"")
 		return http.StatusUnauthorized, ErrInvalidToken
 	}
-	var claims *Claims
 	pk := pemDecodePrivateKey([]byte(os.Getenv(PKENV)))
 	if pk == nil {
 		return http.StatusUnauthorized, ErrInvalidToken
 	}
-	if claims, err = validateToken(tokenStr, pk.PublicKey); err != nil {
+	claims, err := validateToken(tokenStr, pk.PublicKey)
+	if err != nil {
 		return http.StatusUnauthorized, ErrInvalidToken
 	}
-	// Authorize handle claim
-	if ok := m.service.Listed(claims.Handle); !ok {
-		return http.StatusUnauthorized, ErrInvalidToken
+	// Verify if user identified by handle is authorized to access resource
+	if ok := m.service.Authorized(claims.Handle, r.URL.String()); !ok {
+		return http.StatusForbidden, ErrForbidden
 	}
-	// Verify path claim
-	var match bool
-	for _, path := range claims.Resources {
-		if strings.HasPrefix(r.URL.Path, path) {
-			match = true
-			continue
-		}
-	}
-	if !match {
-		return http.StatusForbidden, errors.New("forbidden")
-	}
-
 	// Pass on authorized handle to downstream handlers
 	r.Header.Set("Multipass-Handle", claims.Handle)
 	return http.StatusOK, nil
