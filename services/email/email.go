@@ -188,19 +188,22 @@ func (s *UserService) Listed(handle string) bool {
 	return false
 }
 
-// Authorized return true when a user identified with the given handle is
-// authorized to access the resource at the given rawurl.
+// Authorized returns true when a user identified with the given handle is
+// authorized to access the resource at the given rawurl. Unknown resources
+// are accessible to listed and unlisted user handlers.
 func (s *UserService) Authorized(handle, rawurl string) bool {
-	if !s.Listed(handle) {
+	if ok := s.match(rawurl); ok {
+		if ok := s.Listed(handle); ok {
+			return true
+		}
 		return false
 	}
-	if rawurl == "" {
-		return false
-	}
-	if rawurl[0] != '/' {
-		return false
-	}
+	return true
+}
 
+// match returns true if the given rawurl is match with one of the patterns. An
+// empty rawurl never matches.
+func (s *UserService) match(rawurl string) bool {
 	for _, pattern := range s.patterns {
 		if pathMatch(pattern, rawurl) {
 			return true
