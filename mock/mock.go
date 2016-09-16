@@ -8,13 +8,13 @@ type UserService struct {
 	RegisterFn      func(handle string) error
 	RegisterInvoked bool
 
-	ListedFn      func(handle string) error
+	ListedFn      func(handle string) bool
 	ListedInvoked bool
 
 	AuthorizedFn      func(handle, rawurl string) bool
 	AuthorizedInvoked bool
 
-	Notify        func(handle, loginurl string) error
+	NotifyFn      func(handle, loginurl string) error
 	NotifyInvoked bool
 
 	CloseFn      func() error
@@ -36,7 +36,7 @@ func (s *UserService) Listed(handle string) bool {
 // Notify invokes the mock implementation and marks the function as invoked.
 func (s *UserService) Notify(handle, loginurl string) error {
 	s.NotifyInvoked = true
-	return s.NotifyFn(handle)
+	return s.NotifyFn(handle, loginurl)
 }
 
 // Authorized invokes the mock implementation and marks the function as invoked.
@@ -48,5 +48,5 @@ func (s *UserService) Authorized(handle, rawurl string) bool {
 // Close invokes the mock implementation and marks the function as invoked.
 func (s *UserService) Close() error {
 	s.CloseInvoked = true
-	return s.CloseFn(handle)
+	return s.CloseFn()
 }
