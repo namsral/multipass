@@ -28,14 +28,13 @@ func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 	}
 
 	if _, err := multipass.ResourceHandler(w, r, m); err != nil {
-		u, err := url.Parse(m.BasePath())
-		if err != nil {
-			return http.StatusInternalServerError, nil
+		v := url.Values{"url": []string{r.URL.String()}}
+		u := &url.URL{
+			Path:     m.BasePath(),
+			RawQuery: v.Encode(),
 		}
-		v := url.Values{}
-		v.Set("url", r.URL.String())
-		u.RawQuery = v.Encode()
-		http.Redirect(w, r, u.String(), http.StatusSeeOther)
+		location := u.String()
+		http.Redirect(w, r, location, http.StatusSeeOther)
 		return http.StatusSeeOther, nil
 	}
 
