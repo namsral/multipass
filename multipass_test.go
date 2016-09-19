@@ -361,7 +361,7 @@ func TestMultipassHandlers(t *testing.T) {
 
 func TestVerifyToken(t *testing.T) {
 	signer, pk := newSignerAndPublicKey(t)
-	claims := &Claims{Handle: "leeloo@dallas", Resources: []string{"/"}, Expires: time.Now().Add(time.Hour * 12).Unix()}
+	claims := &Claims{Handle: "leeloo@dallas", Expires: time.Now().Add(time.Hour * 12).Unix()}
 	token, err := accessToken(signer, claims)
 	if err != nil {
 		t.Fatal(err)
@@ -399,12 +399,12 @@ func TestValidateToken(t *testing.T) {
 		shouldEqual bool
 	}{
 		{
-			&Claims{Handle: "leeloo@dallas", Resources: []string{"/"}, Expires: time.Now().Add(time.Hour * 12).Unix()},
+			&Claims{Handle: "leeloo@dallas", Expires: time.Now().Add(time.Hour * 12).Unix()},
 			false,
 			true,
 		},
 		{
-			&Claims{Handle: "leeloo@dallas", Resources: []string{"/"}, Expires: time.Now().Add(time.Hour * -12).Unix()},
+			&Claims{Handle: "leeloo@dallas", Expires: time.Now().Add(time.Hour * -12).Unix()},
 			true,
 			false,
 		},

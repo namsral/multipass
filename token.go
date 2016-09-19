@@ -17,9 +17,8 @@ import (
 
 // Claims are part of the JSON web token
 type Claims struct {
-	Handle    string   `json:"handle"`
-	Resources []string `json:"resources"`
-	Expires   int64    `json:"exp"`
+	Handle  string `json:"handle"`
+	Expires int64  `json:"exp"`
 }
 
 // accessToken return the serialized token given the signer and claims.
