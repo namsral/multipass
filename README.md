@@ -151,27 +151,31 @@ Multipass-Handle: <user handle>
 Extending
 ---------
 
-_Exting Multipass by implementing the Handle Service interface._
+_Exting Multipass by implementing the UserService interface._
 
 The current __something they own__ is the users email address and access tokens are sent to this address. But the __something they own__ can also be a mobile number which can receive SMS messages, or a connected device which can receive Push notifications, chat messages and many more.  
-By implementing the HandleService, shown below, Multipass can be extended to support other _handle services_ which can identify and notify users.
+By implementing the UserService, shown below, Multipass can be extended to support other _user handles_ which can identify and notify users.
 
 ```go
-// A HandleService is an interface used by a Multipass instance to register,
+// A UserService is an interface used by a Multipass instance to register,
 // list user handles and notify users about requested access tokens.
 // A handle is a unique user identifier, e.g. email address.
-type HandleService interface {
+type UserService interface {
 	// Register returns nil when the given handle is accepted for
 	// registration with the service.
 	// The handle is passed on by the Multipass instance and can represent
 	// an username, email address or even an URI representing a connection to
-	// a datastore. The latter allows the HandleService to be associated
+	// a datastore. The latter allows the UserService to be associated
 	// with a RDBMS from which to verify listed users.
 	Register(handle string) error
 
 	// Listed returns true when the given handle is listed with the
 	// service.
 	Listed(handle string) bool
+
+	// Authorized returns true when the user identified by the given handle is
+	// authorized to access the given resource at rawurl.
+	Authorized(handle, rawurl string) bool
 
 	// Notify returns nil when the given login URL is succesfully
 	// communicated to the given handle.
