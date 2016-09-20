@@ -129,9 +129,11 @@ Access tokens are signed [JSON Web Tokens][jwt] with specific claims like user h
 
 __RSA key pairs__
 
-By default, Multipass uses a random RSA key pair to sign and verify user access tokens. These tokens can be also be used and verified by others using the public key. Made available at `[basepath]/pub.cer` when Multipass is running.
+A RSA key pair is used to sign user access tokens. These access tokens and other signatures can be verified by others using the public key made available at the url `[siteaddr][basepath]/pub.cer` when Multipass is running.
 
-Including a signature prevents others from forging access tokens.
+You can set your own private RSA key in the `MULTIPASS_RSA_PRIVATE_KEY` environment variable; make sure to PEM encode the private key.
+
+When no private key is set, the `MULTIPASS_RSA_PRIVATE_KEY` environment variable is empty, a RSA key pair is randomly generated and stored in the environment. This ensures signatures still validate after Multipass reloads during a configuration reload.
 
 
 __Automatic HTTPS__
