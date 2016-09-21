@@ -332,6 +332,31 @@ func ResourceHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int,
 	return http.StatusOK, nil
 }
 
+// AuthHandler wraps any http.Handler to provide authentication using the
+// given Multipass instance.
+// Handlers from other http routers can be wrapped with little effort by
+// copying the AuthHandler and make minor changes.
+func AuthHandler(next http.Handler, m *Multipass) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		if ok := strings.HasPrefix(r.URL.Path, m.BasePath()); ok {
+			m.ServeHTTP(w, r)
+			return
+		}
+		if _, err := ResourceHandler(w, r, m); err != nil {
+			v := url.Values{"url": []string{r.URL.String()}}
+			u := &url.URL{
+				Path:     m.BasePath(),
+				RawQuery: v.Encode(),
+			}
+			location := u.String()
+			http.Redirect(w, r, location, http.StatusSeeOther)
+			return
+		}
+		next.ServeHTTP(w, r)
+	}
+	return http.HandlerFunc(fn)
+}
+
 // A UserService is an interface used by a Multipass instance to register,
 // list user handles and notify users about requested access tokens.
 // A handle is a unique user identifier, e.g. email address.
