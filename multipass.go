@@ -377,7 +377,7 @@ type UserService interface {
 	// authorized to access the given resource at rawurl.
 	Authorized(handle, rawurl string) bool
 
-	// Notify returns nil when the given login URL is succesfully
+	// Notify returns nil when the given login URL is successfully
 	// communicated to the given handle.
 	Notify(handle, loginurl string) error
 
