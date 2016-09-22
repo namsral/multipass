@@ -55,7 +55,7 @@ func (h downstreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) (in
 }
 
 func TestTokenHandler(t *testing.T) {
-	m, err := NewMultipass("")
+	m, err := New("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestTokenHandler(t *testing.T) {
 }
 
 func TestMultipassHandlers(t *testing.T) {
-	m, err := NewMultipass("")
+	m, err := New("")
 	if err != nil {
 		t.Fatal(err)
 	}

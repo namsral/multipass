@@ -42,10 +42,10 @@ type Multipass struct {
 	tmpl     *template.Template
 }
 
-// NewMultipass returns a new instance of Multipass with reasonalble defaults:
+// New returns a new instance of Multipass with reasonalble defaults:
 // 2048 bit RSA key pair, `/multipass` basepath a token expiration time of
 // 24 hours.
-func NewMultipass(siteaddr string) (*Multipass, error) {
+func New(siteaddr string) (*Multipass, error) {
 	// Generate and set a private key if none is set
 	if k := pemDecodePrivateKey([]byte(os.Getenv(PKENV))); k != nil {
 		log.Printf("Use private key from enviroment variable named by key %s\n", PKENV)

@@ -53,7 +53,7 @@ user identified by email address leeloo@dallas has access to the resource at
 
 		addr := "localhost:6080"
 		siteaddr := "http://" + addr
-		m, err := multipass.NewMultipass(siteaddr)
+		m, err := multipass.New(siteaddr)
 		if err != nil {
 			log.Fatal(err)
 		}

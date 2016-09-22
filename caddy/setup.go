@@ -38,7 +38,7 @@ func setup(c *caddy.Controller) error {
 	}
 	rule := rules[0]
 
-	m, err := multipass.NewMultipass(cfg.Addr.String())
+	m, err := multipass.New(cfg.Addr.String())
 	if err != nil {
 		return err
 	}
