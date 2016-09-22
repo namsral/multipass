@@ -159,25 +159,17 @@ The current __something they own__ is the users email address and access tokens 
 By implementing the UserService, shown below, Multipass can be extended to support other _user handles_ which can identify and notify users.
 
 ```go
-// A UserService is an interface used by a Multipass instance to register,
-// list user handles and notify users about requested access tokens.
-// A handle is a unique user identifier, e.g. email address.
+// UserService is an interface used by the Multipass instance to query about
+// listed handles, authorized resource access and to notify users about login
+// urls. A handle is a unique user identifier, e.g. username, email address.
 type UserService interface {
-	// Register returns nil when the given handle is accepted for
-	// registration with the service.
-	// The handle is passed on by the Multipass instance and can represent
-	// an username, email address or even an URI representing a connection to
-	// a datastore. The latter allows the UserService to be associated
-	// with a RDBMS from which to verify listed users.
-	Register(handle string) error
-
 	// Listed returns true when the given handle is listed with the
 	// service.
 	Listed(handle string) bool
 
 	// Authorized returns true when the user identified by the given handle is
-	// authorized to access the given resource at rawurl.
-	Authorized(handle, rawurl string) bool
+	// authorized to access the given resource at rawurl with the given method.
+	Authorized(handle, method, rawurl string) bool
 
 	// Notify returns nil when the given login URL is successfully
 	// communicated to the given handle.
