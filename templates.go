@@ -20,7 +20,7 @@ type page struct {
 	SignoutPath string
 }
 
-func loadTemplates() (*template.Template, error) {
+func loadTemplates() *template.Template {
 	tmpl := template.New("")
 	template.Must(tmpl.New("head").Parse(`<!DOCTYPE html>
 <html>
@@ -182,5 +182,5 @@ a.btn {
 @media only screen and (min-width: 961px) {
 }
 `))
-	return tmpl, nil
+	return tmpl
 }

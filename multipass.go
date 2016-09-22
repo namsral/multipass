@@ -62,17 +62,14 @@ func NewMultipass(siteaddr string) (*Multipass, error) {
 	}
 
 	// Load HTML templates
-	tmpl, err := loadTemplates()
-	if err != nil {
-		return nil, err
-	}
+	templates := loadTemplates()
 
 	m := &Multipass{
 		Expires:  time.Hour * 24,
 		basepath: "/multipass",
 		siteaddr: siteaddr,
 		service:  DefaultUserService,
-		tmpl:     tmpl,
+		tmpl:     templates,
 	}
 
 	return m, nil
