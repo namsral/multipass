@@ -46,15 +46,14 @@ func setup(c *caddy.Controller) error {
 		m.SetBasePath(rule.BasePath)
 	}
 
-	// Create a UserService
-	opt := &email.Options{
-		rule.SMTPAddr,
-		rule.SMTPUser,
-		rule.SMTPPass,
-		rule.MailFrom,
-		rule.Resources,
-	}
-	service, err := email.NewUserService(opt)
+	// Create an email UserService
+	service, err := email.NewUserService(email.Options{
+		SMTPAddr: rule.SMTPAddr,
+		SMTPUser: rule.SMTPUser,
+		SMTPPass: rule.SMTPPass,
+		FromAddr: rule.MailFrom,
+		Patterns: rule.Resources,
+	})
 	if err != nil {
 		return err
 	}

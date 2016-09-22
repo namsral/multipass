@@ -70,23 +70,24 @@ type UserService struct {
 // Options is used to construct a new UserService using the
 // NewUserService function.
 type Options struct {
-	Addr, Username, Password, FromAddr string
-	Patterns                           []string
+	FromAddr                     string
+	Patterns                     []string
+	SMTPAddr, SMTPUser, SMTPPass string
 }
 
 // NewUserService returns a new UserService instance with the given options.
-func NewUserService(opt *Options) (*UserService, error) {
-	s := &UserService{}
+func NewUserService(opt Options) (*UserService, error) {
 	host := "localhost"
 	port := "25"
-	if len(opt.Addr) > 0 {
-		host = opt.Addr
+	if len(opt.SMTPAddr) > 0 {
+		host = opt.SMTPAddr
 	}
-	if h, p, err := net.SplitHostPort(opt.Addr); err == nil {
+	if h, p, err := net.SplitHostPort(opt.SMTPAddr); err == nil {
 		host = h
 		port = p
 	}
 
+	s := &UserService{}
 	for _, pattern := range opt.Patterns {
 		if err := s.AddPattern(pattern); err != nil {
 			return nil, err
@@ -107,7 +108,7 @@ func NewUserService(opt *Options) (*UserService, error) {
 	if err != nil {
 		return nil, err
 	}
-	d := gomail.NewDialer(host, p, opt.Username, opt.Password)
+	d := gomail.NewDialer(host, p, opt.SMTPUser, opt.SMTPPass)
 	s.dialer = d
 
 	go func() {
