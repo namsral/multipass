@@ -41,15 +41,14 @@ user identified by email address leeloo@dallas has access to the resource at
 	}
 
 	func main() {
-		options := &email.Options{
-			Addr:     "localhost:2525", // SMTP address
+		service, err := email.NewUserService(email.Options{
+			SMDTPAddr: "localhost:2525",
 			FromAddr: "Multipass Bot <noreply@dallas>",
-		}
-		service, err := email.NewUserService(options)
+			Patterns: []string{"/private"}, // authenticated users only
+		})
 		if err != nil {
 			log.Fatal(err)
 		}
-		service.AddPattern("/private")    // Accessible to authenticated users
 		service.Register("leeloo@dallas") // Only registered users are granted access
 
 		addr := "localhost:6080"
