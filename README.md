@@ -3,6 +3,8 @@
 Multipass
 =========
 
+__Better authentication for HTTP__
+
 Multipass is a remote proxy which can be used to protect web resources and services using user access control. Users are authenticated using a challenge; prove they are the owner of the registered email address by following a login link.
 
 Multipass implements the idea to authenticate users based on __something they own__ instead of __something they know__. This is better known as the second factor of [Two-factor Authentication][2fa].
@@ -32,6 +34,7 @@ What's here?
 	- RSA Key Pairs
 	- Automatic HTTPS
 	- Reverse Proxy
+- [Include in Go project](#include-in-go-project)
 - [Extending](#extending)
 - [Contributing](#contributing)
 
@@ -149,6 +152,63 @@ The user handle which was used to authenticate the user is passed down to the pr
 Multipass-Handle: <user handle>
 ```
 
+Include in Go project
+---------------------
+
+Multipass is a standard [http.Handler][handler] and can be used to wrap any
+other `http.Handler` to provide Multipass authentication.
+
+In the example below, the appHandler function is wrapped using the AuthHandler
+wrapper. It assumes you have a SMTP service running on `localhost:2525` and
+a user identified by email address leeloo@dallas whom has access to the resource at
+`/private`.
+
+	package main
+
+	import (
+		"fmt"
+		"log"
+		"net/http"
+
+		"github.com/namsral/multipass"
+		"github.com/namsral/multipass/services/email"
+	)
+
+	func appHandler(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			fmt.Fprintf(w, "this is the public page")
+			return
+		case "/private":
+			fmt.Fprintf(w, "this is the private page")
+			return
+		}
+		http.NotFound(w, r)
+	}
+
+	func main() {
+		service, err := email.NewUserService(email.Options{
+			SMDTPAddr: "localhost:2525",
+			FromAddr: "Multipass Bot <noreply@dallas>",
+			Patterns: []string{"/private"}, // authenticated users only
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+		service.Register("leeloo@dallas") // Only registered users are granted access
+
+		addr := "localhost:6080"
+		siteaddr := "http://" + addr
+		m, err := multipass.NewMultipass(siteaddr)
+		if err != nil {
+			log.Fatal(err)
+		}
+		m.SetUserService(service) // Override the default UserService
+
+		h := multipass.AuthHandler(http.HandlerFunc(appHandler), m)
+		log.Fatal(http.ListenAndServe(addr, h))
+	}
+
 
 Extending
 ---------
@@ -202,3 +262,4 @@ Or follow GiHub's guide to [using-pull-requests].
 [2fa]:https://en.wikipedia.org/wiki/Multi-factor_authentication
 [using-pull-requests]:https://help.github.com/articles/using-pull-requests/
 [preview]: https://namsral.github.io/multipass/img/multipass.png "Multipass preview image"
+[handler]: https://golang.org/pkg/net/http/#Handler
