@@ -21,16 +21,6 @@ func NewUserService(w io.Writer) *UserService {
 	}
 }
 
-// Register implements the multipass.UserService.Register method. It writes
-// the given arguments to the UserService's writer element followed by a
-// newline character.
-func (s *UserService) Register(handle string) error {
-	s.lock.Lock()
-	fmt.Fprintln(s.writer, handle)
-	s.lock.Unlock()
-	return nil
-}
-
 // Listed implements the multipass.UserService.Listed method. It writes
 // the given arguments to the UserService's writer element followed by a
 // newline character. It returns true when the length of the given handle is
@@ -45,9 +35,10 @@ func (s *UserService) Listed(handle string) bool {
 // Authorized implements the multipass.UserService.Authorized method. It writes
 // the given arguments to the UserService's writer element followed by a
 // newline character.
-func (s *UserService) Authorized(handle, rawurl string) bool {
+func (s *UserService) Authorized(handle, method, rawurl string) bool {
 	s.lock.Lock()
 	fmt.Fprintln(s.writer, handle)
+	fmt.Fprintln(s.writer, method)
 	fmt.Fprintln(s.writer, rawurl)
 	s.lock.Unlock()
 	return true

@@ -192,7 +192,7 @@ func (s *UserService) Listed(handle string) bool {
 // Authorized returns true when a user identified with the given handle is
 // authorized to access the resource at the given rawurl. Unknown resources
 // are accessible to listed and unlisted user handlers.
-func (s *UserService) Authorized(handle, rawurl string) bool {
+func (s *UserService) Authorized(handle, method, rawurl string) bool {
 	if ok := s.match(rawurl); ok {
 		if ok := s.Listed(handle); ok {
 			return true

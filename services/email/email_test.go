@@ -77,13 +77,13 @@ func TestAuthorized(t *testing.T) {
 	if err := s.AddPattern(pattern); err != nil {
 		t.Error(err)
 	}
-	if actual, expect := s.Authorized(handle, rawurl), true; actual != expect {
+	if actual, expect := s.Authorized(handle, "GET", rawurl), true; actual != expect {
 		t.Error("want %t, got %t", expect, actual)
 	}
-	if actual, expect := s.Authorized("korben@dallas", rawurl), false; actual != expect {
+	if actual, expect := s.Authorized("korben@dallas", "GET", rawurl), false; actual != expect {
 		t.Error("want %t, got %t", expect, actual)
 	}
-	if actual, expect := s.Authorized("anonymous", "/public"), true; actual != expect {
+	if actual, expect := s.Authorized("anonymous", "GET", "/public"), true; actual != expect {
 		t.Error("want %t, got %t", expect, actual)
 	}
 }

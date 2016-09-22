@@ -5,9 +5,6 @@ package mock
 
 // UserService represents a mock implementation of multipass.UserService.
 type UserService struct {
-	RegisterFn      func(handle string) error
-	RegisterInvoked bool
-
 	ListedFn      func(handle string) bool
 	ListedInvoked bool
 
@@ -19,12 +16,6 @@ type UserService struct {
 
 	CloseFn      func() error
 	CloseInvoked bool
-}
-
-// Register invokes the mock implementation and marks the function as invoked.
-func (s *UserService) Register(handle string) error {
-	s.RegisterInvoked = true
-	return s.RegisterFn(handle)
 }
 
 // Listed invokes the mock implementation and marks the function as invoked.
@@ -40,7 +31,7 @@ func (s *UserService) Notify(handle, loginurl string) error {
 }
 
 // Authorized invokes the mock implementation and marks the function as invoked.
-func (s *UserService) Authorized(handle, rawurl string) bool {
+func (s *UserService) Authorized(handle, method, rawurl string) bool {
 	s.AuthorizedInvoked = true
 	return s.AuthorizedFn(handle, rawurl)
 }
