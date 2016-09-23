@@ -188,7 +188,7 @@ a user identified by email address leeloo@dallas whom has access to the resource
 
 	func main() {
 		service, err := email.NewUserService(email.Options{
-			SMDTPAddr: "localhost:2525",
+			SMTPAddr: "localhost:2525",
 			FromAddr: "Multipass Bot <noreply@dallas>",
 			Patterns: []string{"/private"}, // authenticated users only
 		})
