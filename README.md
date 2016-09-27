@@ -1,7 +1,7 @@
-![mutipass preview][preview]
-
 Multipass
 =========
+
+![mutipass preview][preview]
 
 __Better authentication for HTTP__
 
@@ -163,52 +163,53 @@ wrapper. It assumes you have a SMTP service running on `localhost:2525` and
 a user identified by email address leeloo@dallas whom has access to the resource at
 `/private`.
 
-	package main
+```go
+package main
 
-	import (
-		"fmt"
-		"log"
-		"net/http"
+import (
+	"fmt"
+	"log"
+	"net/http"
 
-		"github.com/namsral/multipass"
-		"github.com/namsral/multipass/services/email"
-	)
+	"github.com/namsral/multipass"
+	"github.com/namsral/multipass/services/email"
+)
 
-	func appHandler(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/":
-			fmt.Fprintf(w, "this is the public page")
-			return
-		case "/private":
-			fmt.Fprintf(w, "this is the private page")
-			return
-		}
-		http.NotFound(w, r)
+func appHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.URL.Path {
+	case "/":
+		fmt.Fprintf(w, "this is the public page")
+		return
+	case "/private":
+		fmt.Fprintf(w, "this is the private page")
+		return
 	}
+	http.NotFound(w, r)
+}
 
-	func main() {
-		service, err := email.NewUserService(email.Options{
-			SMTPAddr: "localhost:2525",
-			FromAddr: "Multipass Bot <noreply@dallas>",
-		})
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		service.AddHandle("leeloo@dallas") // Only registered users are granted access
-		service.AddResource("/private/") // authenticated users only
-
-		addr := "localhost:6080"
-		siteaddr := "http://" + addr
-		m, err := multipass.New(siteaddr)
-		if err != nil {
-			log.Fatal(err)
-		}
-		m.SetUserService(service) // Override the default UserService
-
-		h := multipass.AuthHandler(http.HandlerFunc(appHandler), m)
-		log.Fatal(http.ListenAndServe(addr, h))
+func main() {
+	service, err := email.NewUserService(email.Options{
+		SMTPAddr: "localhost:2525",
+		FromAddr: "Multipass Bot <noreply@dallas>",
+	})
+	if err != nil {
+		log.Fatal(err)
 	}
+	service.AddHandle("leeloo@dallas") // Register user
+	service.AddResource("/private") // Make resource private
+
+	addr := "localhost:6080"
+	siteaddr := "http://" + addr
+	m, err := multipass.New(siteaddr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	m.SetUserService(service) // Override the default UserService
+
+	h := multipass.AuthHandler(http.HandlerFunc(appHandler), m)
+	log.Fatal(http.ListenAndServe(addr, h))
+}
+```
 
 
 Extending
@@ -245,13 +246,7 @@ type UserService interface {
 Contributing
 ------------
 
-Contributing is easy:
-
-1. Fork this repo
-2. Checkout a new branch
-3. Submit a pull-request
-
-Or follow GiHub's guide to [using-pull-requests].
+Bug reports and feature requests are welcome. Follow GiHub's guide to [using-pull-requests].
 
 
 [lets]:https://letsencrypt.org

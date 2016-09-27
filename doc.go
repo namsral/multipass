@@ -48,8 +48,8 @@ user identified by email address leeloo@dallas has access to the resource at
 		if err != nil {
 			log.Fatal(err)
 		}
-		service.AddHandle("leeloo@dallas") // Only registered users are granted access
-		service.AddResource("/private/") // authenticated users only
+		service.AddHandle("leeloo@dallas") // Register user
+		service.AddResource("/private") // Make resource private
 
 		addr := "localhost:6080"
 		siteaddr := "http://" + addr
