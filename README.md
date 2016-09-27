@@ -103,7 +103,7 @@ example.com {
 ```
 
 - __resources__: path of resources to protect. _Default: /_
-- __handles__: the handles which identify the users. _Required_
+- __handles__: the handles which identify the users; accepts wildcards like '@' and '@dallas'. _Required_
 - __basepath__: path to the log-in and sign-out page. _Default: /multipass_
 - __expires__: The time duration after which the token expires. Any time duration Go can [parse][goduration]. _Default: 24h_
 - __smtp_addr__: Mailserver address used for sending login links. _Default: localhost:25_
