@@ -190,12 +190,13 @@ a user identified by email address leeloo@dallas whom has access to the resource
 		service, err := email.NewUserService(email.Options{
 			SMTPAddr: "localhost:2525",
 			FromAddr: "Multipass Bot <noreply@dallas>",
-			Patterns: []string{"/private"}, // authenticated users only
 		})
 		if err != nil {
 			log.Fatal(err)
 		}
-		service.Register("leeloo@dallas") // Only registered users are granted access
+
+		service.AddHandle("leeloo@dallas") // Only registered users are granted access
+		service.AddResource("/private/") // authenticated users only
 
 		addr := "localhost:6080"
 		siteaddr := "http://" + addr
