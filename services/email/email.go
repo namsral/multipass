@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/mail"
 	"strconv"
+	"strings"
 	"sync"
 	"text/template"
 	"time"
@@ -50,7 +51,9 @@ Multipass Bot
 
 // Portable errors
 var (
-	ErrInvalidPattern = errors.New("invalid pattern")
+	ErrInvalidHandle   = errors.New("invalid handle")
+	ErrInvalidResource = errors.New("invalid resource")
+	ErrInvalidAddress  = errors.New("invalid address")
 )
 
 // UserService implements the UserService interface. Handles are interperted
@@ -59,9 +62,9 @@ type UserService struct {
 	from     *mail.Address
 	template *template.Template
 
-	lock     sync.Mutex
-	handles  []string
-	patterns []string
+	lock      sync.Mutex
+	handles   []string
+	resources []string
 
 	channel chan *gomail.Message
 	dialer  *gomail.Dialer
@@ -71,7 +74,6 @@ type UserService struct {
 // NewUserService function.
 type Options struct {
 	FromAddr                     string
-	Patterns                     []string
 	SMTPAddr, SMTPUser, SMTPPass string
 }
 
@@ -88,12 +90,6 @@ func NewUserService(opt Options) (*UserService, error) {
 	}
 
 	s := &UserService{}
-	for _, pattern := range opt.Patterns {
-		if err := s.AddPattern(pattern); err != nil {
-			return nil, err
-		}
-	}
-
 	from, err := mail.ParseAddress(opt.FromAddr)
 	if err != nil {
 		return nil, err
@@ -144,30 +140,31 @@ func NewUserService(opt Options) (*UserService, error) {
 	return s, nil
 }
 
-// AddPattern adds the given pattern user accessible resources.
-func (s *UserService) AddPattern(pattern string) error {
+// AddResource adds the given resource or resource pattern to be used in
+// user authorization.
+func (s *UserService) AddResource(value string) error {
 	s.lock.Lock()
-	n := len(pattern)
+	n := len(value)
 	if n == 0 {
-		return ErrInvalidPattern
+		return ErrInvalidResource
 	}
 	// If pattern is /tree/, insert a pattern for /tree
-	if pattern[n-1] == '/' {
-		s.patterns = append(s.patterns, pattern[:n-1])
+	if value[n-1] == '/' {
+		s.resources = append(s.resources, value[:n-1])
 	}
-	s.patterns = append(s.patterns, pattern)
+	s.resources = append(s.resources, value)
 	s.lock.Unlock()
 	return nil
 }
 
-// Register returns nil when the given address is valid.
-func (s *UserService) Register(handle string) error {
-	a, err := mail.ParseAddress(handle)
-	if err != nil {
-		return err
+// AddHandle registers the given handle or handle pattern to be used in
+// user authorization.
+func (s *UserService) AddHandle(value string) error {
+	if ok := ValidHandle(value); !ok {
+		return ErrInvalidHandle
 	}
 	s.lock.Lock()
-	s.handles = append(s.handles, a.Address)
+	s.handles = append(s.handles, value)
 	s.lock.Unlock()
 	return nil
 }
@@ -179,8 +176,8 @@ func (s *UserService) Listed(handle string) bool {
 		return false
 	}
 	s.lock.Lock()
-	for _, e := range s.handles {
-		if e == a.Address {
+	for _, pattern := range s.handles {
+		if ok := MatchHandle(pattern, a.Address); ok {
 			s.lock.Unlock()
 			return true
 		}
@@ -189,28 +186,19 @@ func (s *UserService) Listed(handle string) bool {
 	return false
 }
 
-// Authorized returns true when a user identified with the given handle is
+// Authorized returns true when an user identified with the given handle is
 // authorized to access the resource at the given rawurl. Unknown resources
 // are accessible to listed and unlisted user handlers.
 func (s *UserService) Authorized(handle, method, rawurl string) bool {
-	if ok := s.match(rawurl); ok {
-		if ok := s.Listed(handle); ok {
-			return true
+	for _, pattern := range s.resources {
+		if MatchResource(pattern, rawurl) {
+			if ok := s.Listed(handle); ok {
+				return true
+			}
+			return false
 		}
-		return false
 	}
 	return true
-}
-
-// match returns true if the given rawurl is match with one of the patterns. An
-// empty rawurl never matches.
-func (s *UserService) match(rawurl string) bool {
-	for _, pattern := range s.patterns {
-		if pathMatch(pattern, rawurl) {
-			return true
-		}
-	}
-	return false
 }
 
 // Notify returns nil when the given login URL is succesfully sent to the given
@@ -250,16 +238,73 @@ func (s *UserService) Close() error {
 	return nil
 }
 
-// pathMatch return true when the given pattern matches the given path. It
-// works on root and non root subtrees.
-func pathMatch(pattern, path string) bool {
+// MatchResource reports wether handle matches the handle pattern.
+// The pattern syntax is:
+//   '/private'  matches the resources
+//   '/private/' matches any resource in the subtree
+//   'domain.tld:8080/private/' matches any resource in the subtree with host and port
+func MatchResource(pattern, resource string) bool {
 	n := len(pattern)
 	if n == 0 {
 		// should not happen
 		return false
 	}
 	if pattern[n-1] != '/' {
-		return pattern == path
+		return pattern == resource
 	}
-	return len(path) >= n && path[0:n] == pattern
+	return len(resource) >= n && resource[0:n] == pattern
+}
+
+// SplitLocalDomain splits an email address into local and domain.
+func SplitLocalDomain(address string) (local, domain string, err error) {
+	a := strings.Split(address, "@")
+	if len(a) != 2 {
+		return local, domain, ErrInvalidAddress
+	}
+	local, domain = a[0], a[1]
+	if len(local) == 0 || len(domain) == 0 {
+		return local, domain, ErrInvalidAddress
+	}
+	return local, domain, nil
+}
+
+// MatchHandle reports wether handle matches the handle pattern.
+// The pattern syntax is:
+//   'bob@example.com' matches a single address
+//   '@example.com'    matches any addresses with domain example.com
+//   '@'               matches any address
+func MatchHandle(pattern, handle string) bool {
+	if len(pattern) == 0 {
+		return false
+	}
+	_, domain, err := SplitLocalDomain(handle)
+	if err != nil {
+		return false
+	}
+	if pattern == "@" {
+		return true
+	}
+	if strings.HasPrefix(pattern, "@") {
+		return domain == pattern[1:]
+	}
+	return handle == pattern
+}
+
+// ValidHandle reports wether value is a valid handle or handle pattern.
+// The pattern syntax is:
+//   'bob@example.com' matches a single address
+//   '@example.com'    matches any addresses with domain example.com
+//   '@'               matches any address
+func ValidHandle(value string) bool {
+	if len(value) == 0 {
+		return false
+	}
+	a := strings.Split(value, "@")
+	if len(a) != 2 {
+		return false
+	}
+	if len(a[0]) > 0 && len(a[1]) == 0 {
+		return false
+	}
+	return true
 }
