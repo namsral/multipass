@@ -61,13 +61,13 @@ func TestListed(t *testing.T) {
 	}
 }
 
-func TestRegister(t *testing.T) {
+func TestAddHandle(t *testing.T) {
 	s := &UserService{}
 	if err := s.AddHandle("leeloo@dallas"); err != nil {
 		t.Error(err)
 	}
 	if err := s.AddHandle("leeloo"); err == nil {
-		t.Error("expect Register to error, but did not")
+		t.Error("expect AddHandle to error, but did not")
 	}
 }
 
