@@ -52,13 +52,19 @@ func setup(c *caddy.Controller) error {
 		SMTPUser: rule.SMTPUser,
 		SMTPPass: rule.SMTPPass,
 		FromAddr: rule.MailFrom,
-		Patterns: rule.Resources,
 	})
 	if err != nil {
 		return err
 	}
-	for _, handle := range rule.Handles {
-		service.Register(handle)
+	for _, v := range rule.Handles {
+		if err := service.AddHandle(v); err != nil {
+			return err
+		}
+	}
+	for _, v := range rule.Resources {
+		if err := service.AddResource(v); err != nil {
+			return err
+		}
 	}
 	m.SetUserService(service)
 
