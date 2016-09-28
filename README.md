@@ -1,6 +1,9 @@
 Multipass
 =========
 
+[![Build Status](https://travis-ci.org/namsral/multipass.svg?branch=master)](https://travis-ci.org/namsral/multipass)
+[![GoDoc](https://godoc.org/github.com/namsral/multipass?status.svg)](http://godoc.org/github.com/namsral/multipass)
+
 ![mutipass preview][preview]
 
 __Better authentication for HTTP__
