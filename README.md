@@ -5,11 +5,31 @@ Multipass
 
 __Better authentication for HTTP__
 
-Multipass is a remote proxy which can be used to protect web resources and services using user access control. Users are authenticated using a challenge; prove they are the owner of the registered email address by following a login link.
+Multipass is like [HTTP Basic authentication][basic-auth] but better and without passwords.
 
 Multipass implements the idea to authenticate users based on __something they own__ instead of __something they know__. This is better known as the second factor of [Two-factor Authentication][2fa].
 
-Login links are encoded [JSON Web Tokens][jwt] containing information about the user and their accessible resources. These tokens are used as access tokens with an expiration date and are signed using an on startup generated RSA key pair.
+Multipass comes in two forms; a single binary to run in front of your web services and as a [package](#include-in-go-project) to include in your Go project.
+
+
+### Installation
+
+Download the binary from the [releases][releases] page or [build](#build) from source.
+
+
+### Usage
+
+
+```sh
+$ multipass -conf multipass.conf
+```
+
+For an example configuration see [Configuration](#configuration).
+
+
+### Contribution
+
+Bug reports and feature requests are welcome. Follow GiHub's guide to [using-pull-requests].
 
 
 ### Goal
@@ -22,10 +42,9 @@ Protect internet exposed web resources and services with automatic HTTPS (TLS) a
 Many private web resources and services end up exposed on the internet, accessible by anyone. Think IP video cameras, Key-value stores, analytic applications and many more. Using Multipass, these web resources and services can be protected using automatic HTTPS (TLS) and access can be granted on an individual basis.
 
 
-What's here?
-------------
+Further reading
+---------------
 
-- [Installation](#installation)
 - [Configuration](#configuration)
 - [How it Works](#how-it-works)
 	- User Flow
@@ -36,20 +55,13 @@ What's here?
 	- Reverse Proxy
 - [Include in Go project](#include-in-go-project)
 - [Extending](#extending)
-- [Contributing](#contributing)
-
----
 
 
-Installation
-------------
+Build
+-----
 
-Download the binary from the [releases][releases] page. If your platform isn't listed please submit a PR.
+The Multipass binary depends on the excellent [Caddy][caddy] webserver.
 
-
-### Build
-
-Building the Multipass command.
 
 1. Get the Caddy web server source code:
 
@@ -152,11 +164,11 @@ The user handle which was used to authenticate the user is passed down to the pr
 Multipass-Handle: <user handle>
 ```
 
+
 Include in Go project
 ---------------------
 
-Multipass is a standard [http.Handler][handler] and can be used to wrap any
-other `http.Handler` to provide Multipass authentication.
+Multipass comes with `multipass.AuthHandler` which can wrap any [http.Handler][handler] to provide Multipass authentication. Handlers from other routers and frameworks can be supported, see the [caddy sub-package] for an example.
 
 In the example below, the appHandler function is wrapped using the AuthHandler
 wrapper. It assumes you have a SMTP service running on `localhost:2525` and
@@ -215,7 +227,7 @@ func main() {
 Extending
 ---------
 
-_Exting Multipass by implementing the UserService interface._
+_Extending Multipass by implementing the UserService interface._
 
 The current __something they own__ is the users email address and access tokens are sent to this address. But the __something they own__ can also be a mobile number which can receive SMS messages, or a connected device which can receive Push notifications, chat messages and many more.  
 By implementing the UserService, shown below, Multipass can be extended to support other _user handles_ which can identify and notify users.
@@ -243,12 +255,6 @@ type UserService interface {
 ```
 
 
-Contributing
-------------
-
-Bug reports and feature requests are welcome. Follow GiHub's guide to [using-pull-requests].
-
-
 [lets]:https://letsencrypt.org
 [caddy]:https://caddyserver.com
 [caddydocs]:https://caddyserver.com/docs
@@ -259,3 +265,5 @@ Bug reports and feature requests are welcome. Follow GiHub's guide to [using-pul
 [using-pull-requests]:https://help.github.com/articles/using-pull-requests/
 [preview]: https://namsral.github.io/multipass/img/multipass.png "Multipass preview image"
 [handler]: https://golang.org/pkg/net/http/#Handler
+[basic-auth]: https://en.wikipedia.org/wiki/Basic_access_authentication "Basic access authentication"
+[caddy-subpackage]: https://godoc.org/github.com/namsral/multipass/caddy
