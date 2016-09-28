@@ -106,8 +106,8 @@ func TestTokenHandler(t *testing.T) {
 			desc:   "request without token",
 			method: "GET",
 			path:   "/private",
-			status: http.StatusUnauthorized,
-			err:    ErrInvalidToken,
+			status: http.StatusForbidden,
+			err:    ErrForbidden,
 		},
 		{
 			desc:   "request with invalid token",
@@ -430,17 +430,16 @@ func TestValidateToken(t *testing.T) {
 	}
 }
 
-func TestExtractToken(t *testing.T) {
+func TestGetTokenRequest(t *testing.T) {
 	tests := []struct {
-		desc      string
-		rawQuery  string
-		header    http.Header
-		token     string // expect field
-		shouldErr bool   // expect field
+		desc     string
+		rawQuery string
+		header   http.Header
+		token    string // expect field
 	}{
 		{
-			desc:      "no token",
-			shouldErr: true,
+			desc:  "no token",
+			token: "",
 		},
 		{
 			desc:   "token in Authorization header",
@@ -468,12 +467,7 @@ func TestExtractToken(t *testing.T) {
 			URL:    &url.URL{Path: "/", RawQuery: test.rawQuery},
 			Header: test.header,
 		}
-		token, err := extractToken(req)
-		if err == nil && test.shouldErr {
-			t.Errorf("test #%d; expect error, but did not", i)
-		} else if err != nil && !test.shouldErr {
-			t.Errorf("test #%d expect no error, got %s", i, err)
-		}
+		token := GetTokenRequest(req)
 		if actual, expect := token, test.token; actual != expect {
 			t.Errorf("test #%d; expect token %s, got %s", i, expect, actual)
 		}

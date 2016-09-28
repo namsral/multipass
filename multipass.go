@@ -138,8 +138,8 @@ func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Show login page when there is no token
-		tokenStr, err := extractToken(r)
-		if err != nil {
+		tokenStr := GetTokenRequest(r)
+		if len(tokenStr) == 0 {
 			if s := r.URL.Query().Get("url"); !strings.HasPrefix(s, m.basepath) {
 				p.NextURL = s
 			}
@@ -151,8 +151,8 @@ func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
-		var claims *Claims
-		if claims, err = validateToken(tokenStr, pk.PublicKey); err != nil {
+		claims, err := validateToken(tokenStr, pk.PublicKey)
+		if err != nil {
 			p.Page = tokenInvalidPage
 			if s := r.URL.Query().Get("url"); !strings.HasPrefix(s, m.basepath) {
 				p.NextURL = s
@@ -304,28 +304,27 @@ func NewLoginURL(siteaddr, basepath, token string, v url.Values) (*url.URL, erro
 
 // ResourceHandler validates the token in the request before it writes the response.
 func ResourceHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
-	tokenStr, err := extractToken(r)
-	if err != nil {
-		if ok := m.service.Authorized("", r.Method, r.URL.String()); ok {
-			return http.StatusOK, nil
+	handle := ""
+	if token := GetTokenRequest(r); len(token) > 0 {
+		pk := pemDecodePrivateKey([]byte(os.Getenv(PKENV)))
+		if pk == nil {
+			return http.StatusInternalServerError, errors.New("parsing private key from env failed")
 		}
-		w.Header().Set("Www-Authenticate", "Bearer token_type=\"JWT\"")
-		return http.StatusUnauthorized, ErrInvalidToken
-	}
-	pk := pemDecodePrivateKey([]byte(os.Getenv(PKENV)))
-	if pk == nil {
-		return http.StatusUnauthorized, ErrInvalidToken
-	}
-	claims, err := validateToken(tokenStr, pk.PublicKey)
-	if err != nil {
-		return http.StatusUnauthorized, ErrInvalidToken
+		claims, err := validateToken(token, pk.PublicKey)
+		if err != nil {
+			w.Header().Set("Www-Authenticate", "Bearer token_type=\"JWT\"")
+			return http.StatusUnauthorized, ErrInvalidToken
+		}
+		// Pass on authorized handle to downstream handlers
+		r.Header.Set("Multipass-Handle", claims.Handle)
+
+		handle = claims.Handle
 	}
 	// Verify if user identified by handle is authorized to access resource
-	if ok := m.service.Authorized(claims.Handle, r.Method, r.URL.String()); !ok {
+	if ok := m.service.Authorized(handle, r.Method, r.URL.String()); !ok {
 		return http.StatusForbidden, ErrForbidden
 	}
 	// Pass on authorized handle to downstream handlers
-	r.Header.Set("Multipass-Handle", claims.Handle)
 	return http.StatusOK, nil
 }
 

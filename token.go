@@ -7,7 +7,6 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -34,28 +33,28 @@ func accessToken(signer jose.Signer, claims *Claims) (token string, err error) {
 	return jws.CompactSerialize()
 }
 
-// extractToken returns the JWT token embedded in the given request.
+// GetTokenRequest returns the JWT token embedded in the given request.
 // JWT tokens can be embedded in the header prefixed with "Bearer ", with a
 // "token" key query parameter or a cookie named "jwt_token".
-func extractToken(r *http.Request) (string, error) {
+func GetTokenRequest(r *http.Request) string {
 	//from header
 	if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
 		if len(h) > 7 {
-			return h[7:], nil
+			return h[7:]
 		}
 	}
 
 	//from query parameter
 	if token := r.URL.Query().Get("token"); len(token) > 0 {
-		return token, nil
+		return token
 	}
 
 	//from cookie
 	if cookie, err := r.Cookie("jwt_token"); err == nil {
-		return cookie.Value, nil
+		return cookie.Value
 	}
 
-	return "", fmt.Errorf("no token found")
+	return ""
 }
 
 func validateToken(token string, key rsa.PublicKey) (*Claims, error) {
