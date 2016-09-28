@@ -54,10 +54,10 @@ func TestAddPattern(t *testing.T) {
 func TestListed(t *testing.T) {
 	s := &UserService{}
 	if actual, expect := s.Listed("leeloo"), false; actual != expect {
-		t.Error("expect %t, got %t", expect, actual)
+		t.Errorf("expect %t, got %t", expect, actual)
 	}
 	if actual, expect := s.Listed("leeloo@dallas"), false; actual != expect {
-		t.Error("expect %t, got %t", expect, actual)
+		t.Errorf("expect %t, got %t", expect, actual)
 	}
 }
 
@@ -67,7 +67,7 @@ func TestAddHandle(t *testing.T) {
 		t.Error(err)
 	}
 	if err := s.AddHandle("leeloo"); err == nil {
-		t.Error("expect AddHandle to error, but did not")
+		t.Errorf("expect AddHandle to error, but did not")
 	}
 }
 
@@ -123,7 +123,7 @@ func TestNotify(t *testing.T) {
 		t.Error(err)
 	}
 	if n < 1 {
-		t.Error("want n > 0, got %d", n)
+		t.Errorf("want n > 0, got %d", n)
 	}
 	if err := s.Close(); err != nil {
 		t.Error(err)
