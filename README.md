@@ -168,7 +168,7 @@ Multipass-Handle: <user handle>
 Include in Go project
 ---------------------
 
-Multipass comes with `multipass.AuthHandler` which can wrap any [http.Handler][handler] to provide Multipass authentication. Handlers from other routers and frameworks can be supported, see the [caddy sub-package] for an example.
+Multipass comes with `multipass.AuthHandler` which can wrap any [http.Handler][handler] to provide Multipass authentication. Handlers from other routers and frameworks can be supported, see the [caddy sub-package][caddy-sub-package] for an example.
 
 In the example below, the appHandler function is wrapped using the AuthHandler
 wrapper. It assumes you have a SMTP service running on `localhost:2525` and
@@ -266,4 +266,4 @@ type UserService interface {
 [preview]: https://namsral.github.io/multipass/img/multipass.png "Multipass preview image"
 [handler]: https://golang.org/pkg/net/http/#Handler
 [basic-auth]: https://en.wikipedia.org/wiki/Basic_access_authentication "Basic access authentication"
-[caddy-subpackage]: https://godoc.org/github.com/namsral/multipass/caddy
+[caddy-sub-package]: https://godoc.org/github.com/namsral/multipass/caddy
