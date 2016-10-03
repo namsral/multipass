@@ -22,7 +22,7 @@ import (
 )
 
 func newSignerAndPublicKey(t *testing.T) (jose.Signer, rsa.PublicKey) {
-	pk, err := rsa.GenerateKey(rand.Reader, 2048)
+	pk, err := rsa.GenerateKey(rand.Reader, DefaultKeySize)
 	if err != nil {
 		t.Fatal(err)
 	}

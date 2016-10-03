@@ -50,7 +50,7 @@ func New(siteaddr string) (*Multipass, error) {
 	if k, err := PrivateKeyFromEnvironment(); k != nil && err == nil {
 		log.Printf("Use private key from enviroment variable %s\n", PKENV)
 	} else {
-		key, err := rsa.GenerateKey(rand.Reader, 2048)
+		key, err := rsa.GenerateKey(rand.Reader, DefaultKeySize)
 		if err != nil {
 			return nil, err
 		}
