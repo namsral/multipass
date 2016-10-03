@@ -303,23 +303,37 @@ func NewLoginURL(siteaddr, basepath, token string, v url.Values) (*url.URL, erro
 }
 
 // ResourceHandler validates the token in the request before it writes the response.
+// It adds the user handle if the user is authenticated and signs the any
+// Multipass specific headers.
 func ResourceHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
-	handle := ""
+	var key *rsa.PrivateKey
+	var handle string
+	header := make(http.Header)
 	if token := GetTokenRequest(r); len(token) > 0 {
-		pk := pemDecodePrivateKey([]byte(os.Getenv(PKENV)))
-		if pk == nil {
+		key = pemDecodePrivateKey([]byte(os.Getenv(PKENV)))
+		if key == nil {
 			return http.StatusInternalServerError, errors.New("parsing private key from env failed")
 		}
-		claims, err := validateToken(token, pk.PublicKey)
+		claims, err := validateToken(token, key.PublicKey)
 		if err != nil {
 			w.Header().Set("Www-Authenticate", "Bearer token_type=\"JWT\"")
 			return http.StatusUnauthorized, ErrInvalidToken
 		}
-		// Pass on authorized handle to downstream handlers
-		r.Header.Set("Multipass-Handle", claims.Handle)
-
 		handle = claims.Handle
+		header.Add("Multipass-Handle", handle)
 	}
+	// Sign header
+	if len(header) > 0 {
+		if key == nil {
+			key := pemDecodePrivateKey([]byte(os.Getenv(PKENV)))
+			if key == nil {
+				return http.StatusInternalServerError, errors.New("parsing private key from env failed")
+			}
+		}
+		SignHeader(header, key)
+		copyHeader(r.Header, header)
+	}
+
 	// Verify if user identified by handle is authorized to access resource
 	if ok := m.service.Authorized(handle, r.Method, r.URL.String()); !ok {
 		return http.StatusForbidden, ErrForbidden
