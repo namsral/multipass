@@ -8,12 +8,23 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"io"
+	"os"
 )
 
 // Portable constants
 const (
 	PKENV = "MULTIPASS_RSA_PRIVATE_KEY"
 )
+
+// PrivateKeyFromEnvironment returns the private key as indicated by the
+// environment variable MULTIPASS_RSA_PRIVATE_KEY. The environment value must
+// be a PEM encoding key starting with "-----BEGIN RSA PRIVATE KEY-----".
+//
+// A nil PrivateKey and nil error are returned if no private key is found in
+// the environment variable value.
+func PrivateKeyFromEnvironment() (*rsa.PrivateKey, error) {
+	return pemDecodePrivateKey([]byte(os.Getenv(PKENV)))
+}
 
 func pemEncodePrivateKey(w io.Writer, key *rsa.PrivateKey) error {
 	data := x509.MarshalPKCS1PrivateKey(key)
@@ -27,16 +38,16 @@ func pemEncodePrivateKey(w io.Writer, key *rsa.PrivateKey) error {
 	return nil
 }
 
-func pemDecodePrivateKey(b []byte) *rsa.PrivateKey {
+func pemDecodePrivateKey(b []byte) (*rsa.PrivateKey, error) {
 	block, _ := pem.Decode(b)
 	if block == nil {
-		return nil
+		return nil, nil
 	}
 	pk, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return pk
+	return pk, nil
 }
 
 func pemEncodePublicKey(w io.Writer, key *rsa.PublicKey) error {

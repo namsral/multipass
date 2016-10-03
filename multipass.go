@@ -47,15 +47,15 @@ type Multipass struct {
 // 24 hours.
 func New(siteaddr string) (*Multipass, error) {
 	// Generate and set a private key if none is set
-	if k := pemDecodePrivateKey([]byte(os.Getenv(PKENV))); k != nil {
-		log.Printf("Use private key from enviroment variable named by key %s\n", PKENV)
+	if k, err := PrivateKeyFromEnvironment(); k != nil && err == nil {
+		log.Printf("Use private key from enviroment variable %s\n", PKENV)
 	} else {
-		pk, err := rsa.GenerateKey(rand.Reader, 2048)
+		key, err := rsa.GenerateKey(rand.Reader, 2048)
 		if err != nil {
 			return nil, err
 		}
 		buf := new(bytes.Buffer)
-		if err := pemEncodePrivateKey(buf, pk); err != nil {
+		if err := pemEncodePrivateKey(buf, key); err != nil {
 			return nil, err
 		}
 		os.Setenv(PKENV, buf.String())
@@ -146,8 +146,8 @@ func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
 			m.tmpl.ExecuteTemplate(w, "page", p)
 			return
 		}
-		pk := pemDecodePrivateKey([]byte(os.Getenv(PKENV)))
-		if pk == nil {
+		pk, err := PrivateKeyFromEnvironment()
+		if err != nil || pk == nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
@@ -260,11 +260,11 @@ func (m *Multipass) signoutHandler(w http.ResponseWriter, r *http.Request) {
 // publicKeyHandler writes the public key to the given ResponseWriter to allow
 // other to validate Multipass signed tokens.
 func (m *Multipass) publicKeyHandler(w http.ResponseWriter, r *http.Request) {
-	pk := pemDecodePrivateKey([]byte(os.Getenv(PKENV)))
-	if pk == nil {
+	key, err := PrivateKeyFromEnvironment()
+	if err != nil || key == nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
-	err := pemEncodePublicKey(w, &pk.PublicKey)
+	err = pemEncodePublicKey(w, &key.PublicKey)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
@@ -278,11 +278,11 @@ func (m *Multipass) AccessToken(handle string) (tokenStr string, err error) {
 		Handle:  handle,
 		Expires: time.Now().Add(m.Expires).Unix(),
 	}
-	pk := pemDecodePrivateKey([]byte(os.Getenv(PKENV)))
-	if pk == nil {
+	key, err := PrivateKeyFromEnvironment()
+	if err != nil || key == nil {
 		return "", err
 	}
-	signer, err := jose.NewSigner(jose.PS512, pk)
+	signer, err := jose.NewSigner(jose.PS512, key)
 	if err != nil {
 		return "", err
 	}
@@ -310,10 +310,11 @@ func ResourceHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int,
 	var handle string
 	header := make(http.Header)
 	if token := GetTokenRequest(r); len(token) > 0 {
-		key = pemDecodePrivateKey([]byte(os.Getenv(PKENV)))
-		if key == nil {
+		k, err := PrivateKeyFromEnvironment()
+		if err != nil || k == nil {
 			return http.StatusInternalServerError, errors.New("parsing private key from env failed")
 		}
+		key = k
 		claims, err := validateToken(token, key.PublicKey)
 		if err != nil {
 			w.Header().Set("Www-Authenticate", "Bearer token_type=\"JWT\"")
@@ -325,8 +326,8 @@ func ResourceHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int,
 	// Sign header
 	if len(header) > 0 {
 		if key == nil {
-			key := pemDecodePrivateKey([]byte(os.Getenv(PKENV)))
-			if key == nil {
+			key, err := PrivateKeyFromEnvironment()
+			if err != nil || key == nil {
 				return http.StatusInternalServerError, errors.New("parsing private key from env failed")
 			}
 		}
