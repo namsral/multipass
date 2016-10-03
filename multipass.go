@@ -42,9 +42,14 @@ type Multipass struct {
 	tmpl     *template.Template
 }
 
-// New returns a new instance of Multipass with reasonalble defaults:
-// 2048 bit RSA key pair, `/multipass` basepath a token expiration time of
-// 24 hours.
+// New returns a new instance of Multipass with the given site address.
+//
+// The site address must point to the absolute base URL of the site.
+//
+// Multipass is initialized with the following defaults:
+//     2048 bit key size
+//     /multipass basepath
+//     24h token lifespan
 func New(siteaddr string) (*Multipass, error) {
 	// Generate and set a private key if none is set
 	if k, err := PrivateKeyFromEnvironment(); k != nil && err == nil {
