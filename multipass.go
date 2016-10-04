@@ -53,7 +53,7 @@ type Multipass struct {
 func New(siteaddr string) (*Multipass, error) {
 	// Generate and set a private key if none is set
 	if k, err := PrivateKeyFromEnvironment(); k != nil && err == nil {
-		log.Printf("Use private key from enviroment variable %s\n", PKENV)
+		log.Printf("Use private key from environment variable %s\n", PKENV)
 	} else {
 		key, err := rsa.GenerateKey(rand.Reader, DefaultKeySize)
 		if err != nil {

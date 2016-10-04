@@ -201,7 +201,7 @@ func (s *UserService) Authorized(handle, method, rawurl string) bool {
 	return true
 }
 
-// Notify returns nil when the given login URL is succesfully sent to the given
+// Notify returns nil when the given login URL is successfully sent to the given
 // email address.
 func (s *UserService) Notify(handle, loginurl string) error {
 	toAddr, err := mail.ParseAddress(handle)
