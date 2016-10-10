@@ -232,8 +232,7 @@ Extending
 
 _Extending Multipass by implementing the UserService interface._
 
-The current __something they own__ is the users email address and access tokens are sent to this address. But the __something they own__ can also be a mobile number which can receive SMS messages, or a connected device which can receive Push notifications, chat messages and many more.  
-By implementing the UserService, shown below, Multipass can be extended to support other _user handles_ which can identify and notify users.
+By implementing the UserService, shown below, Multipass can be extended to support other _user handles_ which can identify and other ways to notify users of requested login URLs.
 
 ```go
 // UserService is an interface used by the Multipass instance to query about
