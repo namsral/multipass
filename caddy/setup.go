@@ -61,10 +61,14 @@ func setup(c *caddy.Controller) error {
 			return err
 		}
 	}
-	for _, v := range rule.Resources {
-		if err := service.AddResource(v); err != nil {
-			return err
+	if len(rule.Resources) > 0 {
+		for _, v := range rule.Resources {
+			if err := service.AddResource(v); err != nil {
+				return err
+			}
 		}
+	} else {
+		service.AddResource("/")
 	}
 	m.SetUserService(service)
 
