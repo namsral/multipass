@@ -48,10 +48,12 @@ func setup(c *caddy.Controller) error {
 
 	// Create an email UserService
 	service, err := email.NewUserService(email.Options{
-		SMTPAddr: rule.SMTPAddr,
-		SMTPUser: rule.SMTPUser,
-		SMTPPass: rule.SMTPPass,
-		FromAddr: rule.MailFrom,
+		SMTPAddr:       rule.SMTPAddr,
+		SMTPUser:       rule.SMTPUser,
+		SMTPPass:       rule.SMTPPass,
+		FromAddr:       rule.MailFrom,
+		SMTPClientName: rule.SMTPClientName,
+		SMTPClientArgs: rule.SMTPClientArgs,
 	})
 	if err != nil {
 		return err
@@ -156,6 +158,13 @@ func parse(c *caddy.Controller) ([]Rule, error) {
 						return rules, c.Err("Expecting a single mail template")
 					}
 					rule.MailTmpl = args[0]
+				case "smtp_client":
+					args := c.RemainingArgs()
+					if len(args) == 0 {
+						return rules, c.Err("Expecting at least a command")
+					}
+					rule.SMTPClientName = args[0]
+					rule.SMTPClientArgs = args[len(args):]
 				}
 			}
 			if len(rule.Handles) < 1 {

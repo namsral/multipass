@@ -50,4 +50,7 @@ type Rule struct {
 
 	SMTPAddr, SMTPUser, SMTPPass string
 	MailFrom, MailTmpl           string
+
+	SMTPClientName string // named SMTP client for sending mail message
+	SMTPClientArgs []string
 }
