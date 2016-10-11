@@ -4,12 +4,15 @@
 package email
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/mail"
+	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -67,7 +70,6 @@ type UserService struct {
 	resources []string
 
 	channel chan *gomail.Message
-	dialer  *gomail.Dialer
 }
 
 // Options is used to construct a new UserService using the
@@ -75,69 +77,112 @@ type UserService struct {
 type Options struct {
 	FromAddr                     string
 	SMTPAddr, SMTPUser, SMTPPass string
+	SMTPClientName               string
+	SMTPClientArgs               []string
 }
 
 // NewUserService returns a new UserService instance with the given options.
 func NewUserService(opt Options) (*UserService, error) {
-	host := "localhost"
-	port := "25"
-	if len(opt.SMTPAddr) > 0 {
-		host = opt.SMTPAddr
-	}
-	if h, p, err := net.SplitHostPort(opt.SMTPAddr); err == nil {
-		host = h
-		port = p
-	}
-
 	s := &UserService{}
 	from, err := mail.ParseAddress(opt.FromAddr)
 	if err != nil {
 		return nil, err
 	}
 	s.from = from
-
 	s.template = template.Must(template.New("").Parse(msgTmpl))
+	s.channel = make(chan *gomail.Message)
 
-	c := make(chan *gomail.Message)
-	s.channel = c
-	p, err := strconv.Atoi(port)
+	switch opt.SMTPClientName != "" {
+	case true:
+		go runMSA(s.channel, opt.SMTPClientName, opt.SMTPClientArgs...)
+	default:
+		host := "localhost"
+		port := 25
+		if len(opt.SMTPAddr) > 0 {
+			host = opt.SMTPAddr
+		}
+		h, p, err := net.SplitHostPort(opt.SMTPAddr)
+		if err == nil {
+			host = h
+			i, err := strconv.Atoi(p)
+			if err != nil {
+				return nil, err
+			}
+			port = i
+		}
+		go runMTA(s.channel, host, opt.SMTPUser, opt.SMTPPass, port)
+	}
+	return s, nil
+}
+
+// sendmail runs the given named command with arguments and dumps the message
+// to standard input. Standard output of the command is returned.
+func sendmail(m *gomail.Message, name string, arg ...string) (output []byte, err error) {
+	cmd := exec.Command(name, arg...)
+	cmd.Stderr = os.Stderr
+	buf := new(bytes.Buffer)
+	cmd.Stdout, cmd.Stderr = buf, os.Stderr
+	w, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
 	}
-	d := gomail.NewDialer(host, p, opt.SMTPUser, opt.SMTPPass)
-	s.dialer = d
+	if err = cmd.Start(); err != nil {
+		return nil, err
+	}
+	if _, err := m.WriteTo(w); err != nil {
+		return nil, err
+	}
+	w.Close()
+	err = cmd.Wait()
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
 
-	go func() {
-		var s gomail.SendCloser
-		var err error
-		open := false
-		for {
-			select {
-			case m, ok := <-c:
-				if !ok {
-					return
-				}
-				if !open {
-					if s, err = d.Dial(); err != nil {
-						panic(err)
-					}
-					open = true
-				}
-				if err := gomail.Send(s, m); err != nil {
-					log.Print(err)
-				}
-			case <-time.After(60 * time.Second):
-				if open {
-					if err := s.Close(); err != nil {
-						log.Print(err)
-					}
-					open = false
-				}
+func runMSA(c chan *gomail.Message, name string, arg ...string) {
+	for {
+		select {
+		case m, ok := <-c:
+			if !ok {
+				return
+			}
+			if _, err := sendmail(m, name, arg...); err != nil {
+				log.Println(err)
 			}
 		}
-	}()
+	}
+}
 
-	return s, nil
+func runMTA(c chan *gomail.Message, host, user, pass string, port int) {
+	d := gomail.NewDialer(host, port, user, pass)
+	var s gomail.SendCloser
+	var err error
+	open := false
+	for {
+		select {
+		case m, ok := <-c:
+			if !ok {
+				return
+			}
+			if !open {
+				if s, err = d.Dial(); err != nil {
+					panic(err)
+				}
+				open = true
+			}
+			if err := gomail.Send(s, m); err != nil {
+				log.Print(err)
+			}
+		case <-time.After(60 * time.Second):
+			if open {
+				if err := s.Close(); err != nil {
+					log.Print(err)
+				}
+				open = false
+			}
+		}
+	}
 }
 
 // AddResource adds the given resource or resource pattern to be used in

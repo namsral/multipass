@@ -226,3 +226,24 @@ func TestValidHandle(t *testing.T) {
 	}
 
 }
+
+func TestSendmail(t *testing.T) {
+	m := gomail.NewMessage()
+	m.SetHeader("From", "leeloo@dallas")
+	m.SetHeader("To", "korben@dallas")
+	m.SetBody("text/plain", "Hello!")
+
+	output, err := sendmail(m, "cat")
+	if err != nil {
+		t.Errorf("cat: %v", err)
+	}
+
+	buf := new(bytes.Buffer)
+	if _, err := m.WriteTo(buf); err != nil {
+		t.Error(err)
+	}
+
+	if want, got := buf.Bytes(), output; !bytes.Equal(want, got) {
+		t.Errorf("cat: want %q, got %q", want, got)
+	}
+}
