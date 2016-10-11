@@ -147,17 +147,17 @@ example.com {
 }
 ```
 
-Same example but replaced the SMTP server with a SMTP client:
+Same example but replaced the SMTP server with a SMTP client and accepts a domain wildcard:
 
 ```
 example.com {
 	bind 0.0.0.0
 	multipass {
 		resources /fhloston /paradise
-		handles leeloo@dallas korben@dallas
+		handles @dallas
 		basepath /multipass
 		expires 24h
-		smtp_client /usr/sbin/sendmail -t
+		smtp_client /usr/sbin/sendmail -t -i
 		mail_from "Multipass <no-reply@dallas>"
 	}
 	proxy / localhost:2016
