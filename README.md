@@ -99,6 +99,36 @@ The next thing is to create a configuration file and run the multipass command.
 Configuration
 -------------
 
+### Syntax
+
+Use the following syntax:
+
+```
+multipass {
+	resources   path [path]
+	handles     email [email]
+	basepath    path
+	expires     duration
+	smtp_addr   host:port
+	smtp_user   username
+	smtp_pass   password
+	smto_client command [args...]
+	mail_from   email
+}
+```
+
+- __resources__: path of resources to protect. _Default: /_
+- __handles__: the handles which identify the users; accepts wildcards like '@' and '@dallas'. _Required_
+- __basepath__: path to the log-in and sign-out page. _Default: /multipass_
+- __expires__: The time duration after which the token expires. Any time duration Go can [parse][goduration]. _Default: 24h_
+- __smtp_addr__: Mailserver address used for sending login links. _Default: localhost:25_
+- __smtp_user__: Mailserver username used for authentication.
+- __smtp_pass__: Mailserver password used for authentication.
+- __smtp_client__: SMTP client named command with arguments. Mutually exclusive with __smtp_addr__
+- __mail_from__: From address used in email messages sent to users. _Required_
+
+### Examples:
+
 In the following example, the service running on `localhost:2016` is proxied and protected to allow only users with handles leeloo@dallas and korben@dallas to access the  `/fhloston` and `/paradise` resources.
 
 ```
@@ -117,14 +147,23 @@ example.com {
 }
 ```
 
-- __resources__: path of resources to protect. _Default: /_
-- __handles__: the handles which identify the users; accepts wildcards like '@' and '@dallas'. _Required_
-- __basepath__: path to the log-in and sign-out page. _Default: /multipass_
-- __expires__: The time duration after which the token expires. Any time duration Go can [parse][goduration]. _Default: 24h_
-- __smtp_addr__: Mailserver address used for sending login links. _Default: localhost:25_
-- __smtp_user__: Mailserver username used for authentication.
-- __smtp_pass__: Mailserver password used for authentication.
-- __mail_from__: From address used in email messages sent to users. _Required_
+Same example but replaced the SMTP server with a SMTP client:
+
+```
+example.com {
+	bind 0.0.0.0
+	multipass {
+		resources /fhloston /paradise
+		handles leeloo@dallas korben@dallas
+		basepath /multipass
+		expires 24h
+		smtp_client /usr/sbin/sendmail -t
+		mail_from "Multipass <no-reply@dallas>"
+	}
+	proxy / localhost:2016
+	log stdout
+}
+```
 
 
 How it works
