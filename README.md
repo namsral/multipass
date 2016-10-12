@@ -124,7 +124,7 @@ multipass {
 - __smtp_addr__: Mailserver address used for sending login links. _Default: localhost:25_
 - __smtp_user__: Mailserver username used for authentication.
 - __smtp_pass__: Mailserver password used for authentication.
-- __smtp_client__: SMTP client named command with arguments. Mutually exclusive with __smtp_addr__
+- __smtp_client__: SMTP client command with arguments. Mutually exclusive with __smtp_addr__
 - __mail_from__: From address used in email messages sent to users. _Required_
 
 ### Examples:
