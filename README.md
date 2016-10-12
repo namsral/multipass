@@ -112,7 +112,7 @@ multipass {
 	smtp_addr   host:port
 	smtp_user   username
 	smtp_pass   password
-	smto_client command [args...]
+	smtp_client command [args...]
 	mail_from   email
 }
 ```
