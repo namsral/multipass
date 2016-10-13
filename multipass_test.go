@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path"
 	"reflect"
 	"strings"
 	"testing"
@@ -176,6 +177,7 @@ func TestMultipassHandlers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	m.DisableCSRF()
 	handles := []string{"leeloo@dallas", "korben@dallas", "ruby@rhod"}
 	service := &mock.UserService{}
 	service.NotifyFn = func(handle, loginurl string) error {
@@ -471,5 +473,22 @@ func TestGetTokenRequest(t *testing.T) {
 		if actual, expect := token, test.token; actual != expect {
 			t.Errorf("test #%d; expect token %s, got %s", i, expect, actual)
 		}
+	}
+}
+
+func TestCSRFProtect(t *testing.T) {
+	m, err := New("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := httptest.NewRecorder()
+	req := &http.Request{
+		Method:   "POST",
+		URL:      &url.URL{Path: path.Join(m.basepath, "login")},
+		PostForm: url.Values{"handle": []string{"leeloo@dallas"}, "url": []string{"/"}},
+	}
+	m.ServeHTTP(record, req)
+	if actual, expect := record.Code, http.StatusForbidden; actual != expect {
+		t.Errorf("expect status %d, got %d", expect, actual)
 	}
 }

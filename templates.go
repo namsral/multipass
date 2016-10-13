@@ -6,18 +6,22 @@ package multipass
 import "html/template"
 
 const (
-	loginPage = iota
+	notfoundPage = iota
+	loginPage
 	tokenInvalidPage
 	tokenSentPage
 	continueOrSignoutPage
+	errorPage
 )
 
 type page struct {
-	PJAX        bool
-	Page        int
-	NextURL     string
-	LoginPath   string
-	SignoutPath string
+	PJAX         bool
+	Page         int
+	NextURL      string
+	LoginPath    string
+	SignoutPath  string
+	CSRFField    template.HTML
+	ErrorMessage string
 }
 
 func loadTemplates() *template.Template {
@@ -40,12 +44,14 @@ func loadTemplates() *template.Template {
 	<input type=hidden name=url value="{{ .NextURL }}" />
 	<input type=email name=handle placeholder="Your handle ..." />
 	<input type=submit value="Submit" class="btn btn-default">
+	{{ .CSRFField }}
 </form>`))
 
 	template.Must(tmpl.New("signoutform").Parse(`
 <form action="{{ .SignoutPath }}" method=POST class="login-form">
 	<input type=hidden name=url value="{{ .NextURL }}" />
 	<input type=submit value="Signout" class="btn btn-danger">
+	{{ .CSRFField }}
 </form>`))
 
 	template.Must(tmpl.New("page").Parse(`
@@ -54,22 +60,25 @@ func loadTemplates() *template.Template {
 	<section>
 		<article class="login-box">
 			<h1>Multipass</h1>
-		{{ if eq .Page 0 }}
+		{{ if eq .Page 1 }}
 			{{ template "loginform" . }}
 			<p class="notice">This resource is protected. Submit your handle to gain access.</p>
-		{{ else if eq .Page 1 }}
+		{{ else if eq .Page 2 }}
 			<p class="notice">Your access token has expired or is invalid. Submit your handle to request a new one.</p>
 			{{ template "loginform" . }}
 			<p class="notice">This resource is protected.</p>
-		{{ else if eq .Page 2 }}
-			<p>A message with an access token was sent to your handle; Follow the login link in the message to gain access.</p>
 		{{ else if eq .Page 3 }}
+			<p>A message with an access token was sent to your handle; Follow the login link in the message to gain access.</p>
+		{{ else if eq .Page 4 }}
 			<p class="notice">Continue to access the private resource or signout.</p>
 			<a href="{{ .NextURL }}" class="btn btn-success">Continue</a>
 			{{ template "signoutform" . }}
 			<p class="notice">This resource is protected.</p>
+		{{ else if eq .Page 5 }}
+			<p>{{ .ErrorMessage }}</p>
 		{{ else }}
-			<p>Default page</p>
+			<h4>Not Found (404)</p>
+			<p>Sorry, couldn't find what you're looking for.</p>
 		{{ end }}
 		</article>
 	</section>

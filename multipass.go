@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/base64"
 	"errors"
 	"html/template"
 	"log"
@@ -17,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorilla/csrf"
 	"github.com/namsral/multipass/services/io"
 
 	jose "gopkg.in/square/go-jose.v1"
@@ -40,6 +42,7 @@ type Multipass struct {
 	siteaddr string
 	service  UserService
 	tmpl     *template.Template
+	handler  http.Handler
 }
 
 // New returns a new instance of Multipass with the given site address.
@@ -85,6 +88,11 @@ func (m *Multipass) BasePath() string {
 	return m.basepath
 }
 
+// DisableCSRF disables CSRF prevention.
+func (m *Multipass) DisableCSRF() {
+	m.handler = http.HandlerFunc(m.routeHandler)
+}
+
 // SetBasePath overrides the default base path of `/multipass`.
 // The given basepath is made absolute before it is set.
 func (m *Multipass) SetBasePath(basepath string) {
@@ -106,8 +114,20 @@ func (m *Multipass) SetUserService(s UserService) {
 
 // ServeHTTP satisfies the ServeHTTP interface
 func (m *Multipass) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if m.handler == nil {
+		m.handler = csrfProtect(http.HandlerFunc(m.routeHandler), m)
+	}
+	m.handler.ServeHTTP(w, r)
+}
+
+// routeHandler routes request to the appropraite handler.
+func (m *Multipass) routeHandler(w http.ResponseWriter, r *http.Request) {
+	if s := strings.TrimSuffix(r.URL.Path, "/"); len(r.URL.Path) > len(s) {
+		http.Redirect(w, r, s, http.StatusMovedPermanently)
+	}
+
+	var fn func(w http.ResponseWriter, r *http.Request)
 	if p := strings.TrimPrefix(r.URL.Path, m.BasePath()); len(p) < len(r.URL.Path) {
-		var fn func(http.ResponseWriter, *http.Request)
 		switch p {
 		case "":
 			fn = m.rootHandler
@@ -119,13 +139,52 @@ func (m *Multipass) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			fn = m.confirmHandler
 		case "/pub.cer":
 			fn = m.publicKeyHandler
-		default:
-			fn = http.NotFound
 		}
-		fn(w, r)
-		return
 	}
-	http.NotFound(w, r)
+	if fn == nil {
+		fn = func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(404)
+			p := &page{
+				Page: notfoundPage,
+			}
+			m.tmpl.ExecuteTemplate(w, "page", p)
+		}
+	}
+	fn(w, r)
+}
+
+// csrfProtect wraps the given http.Handler to protect against CSRF attacks.
+// The CSRF key is persisted in the enviroment to not break CSRF
+// validation between application restarts.
+func csrfProtect(h http.Handler, m *Multipass) http.Handler {
+	key, err := base64.StdEncoding.DecodeString(os.Getenv("MULTIPASS_CSRF_KEY"))
+	if err != nil || len(key) != 32 {
+		key = make([]byte, 32)
+		_, err := rand.Read(key)
+		if err != nil {
+			panic(err)
+		}
+		// Persist key on reloads
+		os.Setenv("MULTIPASS_CSRF_KEY", base64.StdEncoding.EncodeToString(key))
+	}
+
+	errorHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(403)
+		p := &page{
+			Page:         errorPage,
+			ErrorMessage: "Sorry, your CSRF token is invalid",
+		}
+		m.tmpl.ExecuteTemplate(w, "page", p)
+	})
+
+	opts := []csrf.Option{
+		csrf.Secure(os.Getenv("MULTIPASS_DEV") == ""),
+		csrf.Path(m.basepath),
+		csrf.FieldName("csrf.token"),
+		csrf.ErrorHandler(errorHandler),
+	}
+
+	return csrf.Protect(key, opts...)(h)
 }
 
 // rootHandler handles the "/" path of the Multipass handler.
@@ -140,6 +199,7 @@ func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
 			Page:        loginPage,
 			LoginPath:   path.Join(m.basepath, "login"),
 			SignoutPath: path.Join(m.basepath, "signout"),
+			CSRFField:   csrf.TemplateField(r),
 		}
 
 		// Show login page when there is no token
