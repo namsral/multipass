@@ -94,7 +94,7 @@ func (m *Multipass) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	m.handler.ServeHTTP(w, r)
 }
 
-// routeHandler routes request to the appropraite handler.
+// routeHandler routes request to the appropriate handler.
 func (m *Multipass) routeHandler(w http.ResponseWriter, r *http.Request) {
 	if s := strings.TrimSuffix(r.URL.Path, "/"); len(r.URL.Path) > len(s) {
 		http.Redirect(w, r, s, http.StatusMovedPermanently)
@@ -128,7 +128,7 @@ func (m *Multipass) routeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // csrfProtect wraps the given http.Handler to protect against CSRF attacks.
-// The CSRF key is persisted in the enviroment to not break CSRF
+// The CSRF key is persisted in the environment to not break CSRF
 // validation between application restarts.
 func csrfProtect(h http.Handler, m *Multipass) http.Handler {
 	key, err := base64.StdEncoding.DecodeString(os.Getenv("MULTIPASS_CSRF_KEY"))
