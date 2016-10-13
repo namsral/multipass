@@ -5,8 +5,11 @@ package multipass
 
 import (
 	"html/template"
+	"os"
 	"path"
 	"time"
+
+	"github.com/namsral/multipass/services/io"
 )
 
 // Option describes a functional option for configuring the Multipass
@@ -62,7 +65,7 @@ func parseOptions(opts ...Option) *Multipass {
 	// set default for the options
 	m.opts.Expires = time.Hour * 24
 	m.opts.Basepath = "/multipass"
-	m.opts.Service = DefaultUserService
+	m.opts.Service = io.NewUserService(os.Stdout)
 	m.opts.Template = *loadTemplates()
 	m.opts.CSRF = true
 

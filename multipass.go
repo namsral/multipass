@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/gorilla/csrf"
-	"github.com/namsral/multipass/services/io"
 
 	jose "gopkg.in/square/go-jose.v1"
 )
@@ -30,9 +29,6 @@ var (
 	ErrForbidden    = errors.New(http.StatusText(http.StatusForbidden))
 	ErrUnauthorized = errors.New(http.StatusText(http.StatusUnauthorized))
 )
-
-// DefaultUserService is the default UserService used by Multipass.
-var DefaultUserService = io.NewUserService(os.Stdout)
 
 // options contains the optional settings for the Multipass instance.
 type options struct {
