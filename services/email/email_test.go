@@ -246,12 +246,13 @@ func TestSendmail(t *testing.T) {
 	// Need to parse messages before comparison as the order of headers may
 	// differ
 
-	mGot, err := mail.ReadMessage(bytes.NewBuffer(output))
+	buf := bytes.NewBuffer(output)
+	mGot, err := mail.ReadMessage(buf)
 	if err != nil {
 		log.Fatal(err)
 	}
+	buf.Reset()
 
-	buf := new(bytes.Buffer)
 	if _, err := m.WriteTo(buf); err != nil {
 		t.Error(err)
 	}
@@ -260,12 +261,20 @@ func TestSendmail(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// validate Header
 	if want, got := mWant.Header, mGot.Header; !reflect.DeepEqual(want, got) {
 		t.Errorf("cat: want %q, got %q", want, got)
 	}
 
+	// validate Body
 	bGot, err := ioutil.ReadAll(mGot.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
 	bWant, err := ioutil.ReadAll(mWant.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if want, got := bWant, bGot; !bytes.Equal(want, got) {
 		t.Errorf("cat: want %q, got %q", want, got)
 	}
