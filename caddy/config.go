@@ -28,7 +28,7 @@ func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 	}
 
 	if _, err := multipass.ResourceHandler(w, r, m); err != nil {
-		v := url.Values{"url": []string{r.URL.String()}}
+		v := url.Values{"next": []string{r.URL.String()}}
 		u := &url.URL{
 			Path:     m.Basepath(),
 			RawQuery: v.Encode(),

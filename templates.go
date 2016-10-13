@@ -41,7 +41,7 @@ func loadTemplates() *template.Template {
 
 	template.Must(tmpl.New("loginform").Parse(`
 <form action="{{ .LoginPath }}" method=POST class="login-form">
-	<input type=hidden name=url value="{{ .NextURL }}" />
+	<input type=hidden name=next value="{{ .NextURL }}" />
 	<input type=email name=handle placeholder="Your handle ..." />
 	<input type=submit value="Submit" class="btn btn-default">
 	{{ .CSRFField }}
@@ -49,7 +49,7 @@ func loadTemplates() *template.Template {
 
 	template.Must(tmpl.New("signoutform").Parse(`
 <form action="{{ .SignoutPath }}" method=POST class="login-form">
-	<input type=hidden name=url value="{{ .NextURL }}" />
+	<input type=hidden name=next value="{{ .NextURL }}" />
 	<input type=submit value="Signout" class="btn btn-danger">
 	{{ .CSRFField }}
 </form>`))

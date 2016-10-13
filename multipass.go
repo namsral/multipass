@@ -179,7 +179,7 @@ func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
 		// Show login page when there is no token
 		tokenStr := GetTokenRequest(r)
 		if len(tokenStr) == 0 {
-			if s := r.URL.Query().Get("url"); !strings.HasPrefix(s, m.opts.Basepath) {
+			if s := r.URL.Query().Get("next"); !strings.HasPrefix(s, m.opts.Basepath) {
 				p.NextURL = s
 			}
 			m.opts.Template.ExecuteTemplate(w, "page", p)
@@ -193,7 +193,7 @@ func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
 		claims, err := validateToken(tokenStr, pk.PublicKey)
 		if err != nil {
 			p.Page = tokenInvalidPage
-			if s := r.URL.Query().Get("url"); !strings.HasPrefix(s, m.opts.Basepath) {
+			if s := r.URL.Query().Get("next"); !strings.HasPrefix(s, m.opts.Basepath) {
 				p.NextURL = s
 			}
 			m.opts.Template.ExecuteTemplate(w, "page", p)
@@ -205,7 +205,7 @@ func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
 			m.opts.Template.ExecuteTemplate(w, "page", p)
 			return
 		}
-		if cookie, err := r.Cookie("next_url"); err == nil {
+		if cookie, err := r.Cookie("next"); err == nil {
 			p.NextURL = cookie.Value
 		}
 		p.Page = continueOrSignoutPage
@@ -225,9 +225,9 @@ func (m *Multipass) loginHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			http.SetCookie(w, cookie)
 		}
-		if nexturl := r.URL.Query().Get("url"); len(nexturl) > 0 {
+		if nexturl := r.URL.Query().Get("next"); len(nexturl) > 0 {
 			cookie := &http.Cookie{
-				Name:  "next_url",
+				Name:  "next",
 				Value: nexturl,
 				Path:  "/",
 			}
@@ -246,8 +246,8 @@ func (m *Multipass) loginHandler(w http.ResponseWriter, r *http.Request) {
 					log.Print(err)
 				}
 				values := url.Values{}
-				if s := r.PostForm.Get("url"); len(s) > 0 {
-					values.Set("url", s)
+				if s := r.PostForm.Get("next"); len(s) > 0 {
+					values.Set("next", s)
 				}
 				loginURL, err := NewLoginURL(m.siteaddr, m.opts.Basepath, token, values)
 				if err != nil {
@@ -399,7 +399,7 @@ func AuthHandler(next http.Handler, m *Multipass) http.Handler {
 			return
 		}
 		if _, err := ResourceHandler(w, r, m); err != nil {
-			v := url.Values{"url": []string{r.URL.String()}}
+			v := url.Values{"next": []string{r.URL.String()}}
 			u := &url.URL{
 				Path:     m.Basepath(),
 				RawQuery: v.Encode(),

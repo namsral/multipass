@@ -261,7 +261,7 @@ func TestMultipassHandlers(t *testing.T) {
 			desc:      "submit handle",
 			method:    "POST",
 			path:      "/multipass/login",
-			postForm:  url.Values{"handle": []string{"leeloo@dallas"}, "url": []string{"/private"}},
+			postForm:  url.Values{"handle": []string{"leeloo@dallas"}, "next": []string{"/private"}},
 			status:    http.StatusSeeOther,
 			headerMap: http.Header{"Location": []string{"/multipass/confirm"}},
 		},
@@ -269,7 +269,7 @@ func TestMultipassHandlers(t *testing.T) {
 			desc:      "submit unregisterd handle",
 			method:    "POST",
 			path:      "/multipass/login",
-			postForm:  url.Values{"handle": []string{"ruby@rhod"}, "url": []string{"/private"}},
+			postForm:  url.Values{"handle": []string{"ruby@rhod"}, "next": []string{"/private"}},
 			status:    http.StatusSeeOther,
 			headerMap: http.Header{"Location": []string{"/multipass/confirm"}},
 		},
@@ -292,7 +292,7 @@ func TestMultipassHandlers(t *testing.T) {
 			path:   "/multipass",
 			header: http.Header{"Cookie": []string{
 				fmt.Sprint(&http.Cookie{Name: "jwt_token", Value: token, Path: "/"}),
-				fmt.Sprint(&http.Cookie{Name: "next_url", Value: token, Path: "/private"}),
+				fmt.Sprint(&http.Cookie{Name: "next", Value: token, Path: "/private"}),
 			}},
 			status: http.StatusOK,
 		},
@@ -320,7 +320,7 @@ func TestMultipassHandlers(t *testing.T) {
 				"Location": []string{"/multipath"},
 				"Cookie": []string{
 					fmt.Sprint(&http.Cookie{Name: "jwt_token", Value: "a", Path: "/"}),
-					fmt.Sprint(&http.Cookie{Name: "next_url", Value: "b", Path: "/"}),
+					fmt.Sprint(&http.Cookie{Name: "next", Value: "b", Path: "/"}),
 				}},
 		},
 	}
@@ -472,7 +472,7 @@ func TestCSRFProtect(t *testing.T) {
 	req := &http.Request{
 		Method:   "POST",
 		URL:      &url.URL{Path: path.Join(m.opts.Basepath, "login")},
-		PostForm: url.Values{"handle": []string{"leeloo@dallas"}, "url": []string{"/"}},
+		PostForm: url.Values{"handle": []string{"leeloo@dallas"}, "next": []string{"/"}},
 	}
 	m.ServeHTTP(record, req)
 	if actual, expect := record.Code, http.StatusForbidden; actual != expect {
