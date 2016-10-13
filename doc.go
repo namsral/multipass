@@ -29,12 +29,13 @@ user identified by email address leeloo@dallas has access to the resource at
 	)
 
 	func appHandler(w http.ResponseWriter, r *http.Request) {
+		handle := r.Header.Get("Multipass-Handle")
+		if len(handle) == 0 {
+			handle = "anonymous"
+		}
 		switch r.URL.Path {
-		case "/":
-			fmt.Fprintf(w, "this is the public page")
-			return
-		case "/private":
-			fmt.Fprintf(w, "this is the private page")
+		case "/", "/private":
+			fmt.Fprintf(w, "Hello %s, welcome to %s", handle, r.URL.Path)
 			return
 		}
 		http.NotFound(w, r)
@@ -49,20 +50,15 @@ user identified by email address leeloo@dallas has access to the resource at
 			log.Fatal(err)
 		}
 		service.AddHandle("leeloo@dallas") // Register user
-		service.AddResource("/private") // Make resource private
+		service.AddResource("/private")    // Make resource private
 
 		addr := "localhost:6080"
 		siteaddr := "http://" + addr
-		m, err := multipass.New(siteaddr)
-		if err != nil {
-			log.Fatal(err)
-		}
-		m.SetUserService(service) // Override the default UserService
+		m := multipass.New(siteaddr, multipass.Service(service))
 
 		h := multipass.AuthHandler(http.HandlerFunc(appHandler), m)
 		log.Fatal(http.ListenAndServe(addr, h))
 	}
-
 
 The package consist of three major components; Multipass, ResourceHandler
 and UserService.
@@ -73,13 +69,11 @@ Multipass
 Multipass is a http.Handler which issues and signs user tokens and
 validates their signature.
 
-	NewMultipass(siteaddr string) (*Multipass, error)
+	func New(siteaddr string, opts ...Option) *Multipass {
 
 Multipass has it's own web UI which is available at the configurable basepath.
 From the web UI users can request a login url to gain access to private
 resources.
-
-	Multipass.SetBasePath(basepath string)
 
 
 UserService
@@ -123,7 +117,7 @@ The ResourceHandler extracts any user token from the header,
 cookie header or query parameters and validates the user tokens signature with
 preset or pre-generated key pairs.
 
-	ResourceHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error)
+	func ResourceHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
 
 */
 package multipass

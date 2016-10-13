@@ -230,12 +230,13 @@ import (
 )
 
 func appHandler(w http.ResponseWriter, r *http.Request) {
+	handle := r.Header.Get("Multipass-Handle")
+	if len(handle) == 0 {
+		handle = "anonymous"
+	}
 	switch r.URL.Path {
-	case "/":
-		fmt.Fprintf(w, "this is the public page")
-		return
-	case "/private":
-		fmt.Fprintf(w, "this is the private page")
+	case "/", "/private":
+		fmt.Fprintf(w, "Hello %s, welcome to %s", handle, r.URL.Path)
 		return
 	}
 	http.NotFound(w, r)
@@ -250,15 +251,11 @@ func main() {
 		log.Fatal(err)
 	}
 	service.AddHandle("leeloo@dallas") // Register user
-	service.AddResource("/private") // Make resource private
+	service.AddResource("/private")    // Make resource private
 
 	addr := "localhost:6080"
 	siteaddr := "http://" + addr
-	m, err := multipass.New(siteaddr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	m.SetUserService(service) // Override the default UserService
+	m := multipass.New(siteaddr, multipass.Service(service))
 
 	h := multipass.AuthHandler(http.HandlerFunc(appHandler), m)
 	log.Fatal(http.ListenAndServe(addr, h))
