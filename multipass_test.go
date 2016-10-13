@@ -56,11 +56,6 @@ func (h downstreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) (in
 }
 
 func TestTokenHandler(t *testing.T) {
-	m, err := New("")
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	handles := []string{"leeloo@dallas", "korben@dallas", "ruby@rhod"}
 	service := &mock.UserService{}
 	service.NotifyFn = func(handle, loginurl string) error {
@@ -83,7 +78,7 @@ func TestTokenHandler(t *testing.T) {
 		}
 		return false
 	}
-	m.SetUserService(service)
+	m := New("", Service(service))
 
 	token, err := m.AccessToken(handles[0])
 	if err != nil {
@@ -173,11 +168,6 @@ func TestTokenHandler(t *testing.T) {
 }
 
 func TestMultipassHandlers(t *testing.T) {
-	m, err := New("")
-	if err != nil {
-		t.Fatal(err)
-	}
-	m.DisableCSRF()
 	handles := []string{"leeloo@dallas", "korben@dallas", "ruby@rhod"}
 	service := &mock.UserService{}
 	service.NotifyFn = func(handle, loginurl string) error {
@@ -203,7 +193,7 @@ func TestMultipassHandlers(t *testing.T) {
 		}
 		return false
 	}
-	m.SetUserService(service)
+	m := New("", CSRF(false), Service(service))
 
 	token, err := m.AccessToken(handles[0])
 	if err != nil {
@@ -477,14 +467,11 @@ func TestGetTokenRequest(t *testing.T) {
 }
 
 func TestCSRFProtect(t *testing.T) {
-	m, err := New("")
-	if err != nil {
-		t.Fatal(err)
-	}
+	m := New("")
 	record := httptest.NewRecorder()
 	req := &http.Request{
 		Method:   "POST",
-		URL:      &url.URL{Path: path.Join(m.basepath, "login")},
+		URL:      &url.URL{Path: path.Join(m.opts.Basepath, "login")},
 		PostForm: url.Values{"handle": []string{"leeloo@dallas"}, "url": []string{"/"}},
 	}
 	m.ServeHTTP(record, req)

@@ -34,16 +34,21 @@ var (
 // DefaultUserService is the default UserService used by Multipass.
 var DefaultUserService = io.NewUserService(os.Stdout)
 
+// options contains the optional settings for the Multipass instance.
+type options struct {
+	Expires  time.Duration
+	Basepath string
+	Service  UserService
+	Template template.Template
+	CSRF     bool
+}
+
 // Multipass implements the http.Handler interface which can handle
 // authentication and authorization of users and resources using signed JWT.
 type Multipass struct {
-	Expires time.Duration
-
-	basepath string
 	siteaddr string
-	service  UserService
-	tmpl     *template.Template
 	handler  http.Handler
+	opts     options
 }
 
 // New returns a new instance of Multipass with the given site address.
@@ -52,72 +57,44 @@ type Multipass struct {
 //
 // Multipass is initialized with the following defaults:
 //     2048 bit key size
-//     /multipass basepath
+//     /multipass Basepath
 //     24h token lifespan
-func New(siteaddr string) (*Multipass, error) {
+func New(siteaddr string, opts ...Option) *Multipass {
+	m := parseOptions(opts...)
+	m.siteaddr = siteaddr
+
 	// Generate and set a private key if none is set
 	if k, err := PrivateKeyFromEnvironment(); k != nil && err == nil {
 		log.Printf("Use private key from environment variable %s\n", PKENV)
 	} else {
 		key, err := rsa.GenerateKey(rand.Reader, DefaultKeySize)
 		if err != nil {
-			return nil, err
+			panic(err)
 		}
 		buf := new(bytes.Buffer)
 		if err := pemEncodePrivateKey(buf, key); err != nil {
-			return nil, err
+			panic(err)
 		}
 		os.Setenv(PKENV, buf.String())
 	}
 
-	// Load HTML templates
-	templates := loadTemplates()
-
-	m := &Multipass{
-		Expires:  time.Hour * 24,
-		basepath: "/multipass",
-		siteaddr: siteaddr,
-		service:  DefaultUserService,
-		tmpl:     templates,
+	switch m.opts.CSRF {
+	case false:
+		m.handler = http.HandlerFunc(m.routeHandler)
+	default:
+		m.handler = csrfProtect(http.HandlerFunc(m.routeHandler), m)
 	}
 
-	return m, nil
+	return m
 }
 
-// BasePath return the base path.
-func (m *Multipass) BasePath() string {
-	return m.basepath
-}
-
-// DisableCSRF disables CSRF prevention.
-func (m *Multipass) DisableCSRF() {
-	m.handler = http.HandlerFunc(m.routeHandler)
-}
-
-// SetBasePath overrides the default base path of `/multipass`.
-// The given basepath is made absolute before it is set.
-func (m *Multipass) SetBasePath(basepath string) {
-	p := path.Clean(basepath)
-	if len(p) == 0 {
-		return
-	}
-	if p[len(p)-1] != '/' {
-		m.basepath = path.Join("/", p)
-		return
-	}
-	m.basepath = p
-}
-
-// SetUserService overrides the default UserService.
-func (m *Multipass) SetUserService(s UserService) {
-	m.service = s
+// Basepath return the base path.
+func (m *Multipass) Basepath() string {
+	return m.opts.Basepath
 }
 
 // ServeHTTP satisfies the ServeHTTP interface
 func (m *Multipass) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if m.handler == nil {
-		m.handler = csrfProtect(http.HandlerFunc(m.routeHandler), m)
-	}
 	m.handler.ServeHTTP(w, r)
 }
 
@@ -128,7 +105,7 @@ func (m *Multipass) routeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var fn func(w http.ResponseWriter, r *http.Request)
-	if p := strings.TrimPrefix(r.URL.Path, m.BasePath()); len(p) < len(r.URL.Path) {
+	if p := strings.TrimPrefix(r.URL.Path, m.opts.Basepath); len(p) < len(r.URL.Path) {
 		switch p {
 		case "":
 			fn = m.rootHandler
@@ -148,7 +125,7 @@ func (m *Multipass) routeHandler(w http.ResponseWriter, r *http.Request) {
 			p := &page{
 				Page: notfoundPage,
 			}
-			m.tmpl.ExecuteTemplate(w, "page", p)
+			m.opts.Template.ExecuteTemplate(w, "page", p)
 		}
 	}
 	fn(w, r)
@@ -175,12 +152,12 @@ func csrfProtect(h http.Handler, m *Multipass) http.Handler {
 			Page:         errorPage,
 			ErrorMessage: "Sorry, your CSRF token is invalid",
 		}
-		m.tmpl.ExecuteTemplate(w, "page", p)
+		m.opts.Template.ExecuteTemplate(w, "page", p)
 	})
 
 	opts := []csrf.Option{
 		csrf.Secure(os.Getenv("MULTIPASS_DEV") == ""),
-		csrf.Path(m.basepath),
+		csrf.Path(m.opts.Basepath),
 		csrf.FieldName("csrf.token"),
 		csrf.ErrorHandler(errorHandler),
 	}
@@ -198,18 +175,18 @@ func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
 		// Regular login page
 		p := &page{
 			Page:        loginPage,
-			LoginPath:   path.Join(m.basepath, "login"),
-			SignoutPath: path.Join(m.basepath, "signout"),
+			LoginPath:   path.Join(m.opts.Basepath, "login"),
+			SignoutPath: path.Join(m.opts.Basepath, "signout"),
 			CSRFField:   csrf.TemplateField(r),
 		}
 
 		// Show login page when there is no token
 		tokenStr := GetTokenRequest(r)
 		if len(tokenStr) == 0 {
-			if s := r.URL.Query().Get("url"); !strings.HasPrefix(s, m.basepath) {
+			if s := r.URL.Query().Get("url"); !strings.HasPrefix(s, m.opts.Basepath) {
 				p.NextURL = s
 			}
-			m.tmpl.ExecuteTemplate(w, "page", p)
+			m.opts.Template.ExecuteTemplate(w, "page", p)
 			return
 		}
 		pk, err := PrivateKeyFromEnvironment()
@@ -220,23 +197,23 @@ func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
 		claims, err := validateToken(tokenStr, pk.PublicKey)
 		if err != nil {
 			p.Page = tokenInvalidPage
-			if s := r.URL.Query().Get("url"); !strings.HasPrefix(s, m.basepath) {
+			if s := r.URL.Query().Get("url"); !strings.HasPrefix(s, m.opts.Basepath) {
 				p.NextURL = s
 			}
-			m.tmpl.ExecuteTemplate(w, "page", p)
+			m.opts.Template.ExecuteTemplate(w, "page", p)
 			return
 		}
 		// Authorize handle claim
-		if ok := m.service.Listed(claims.Handle); !ok {
+		if ok := m.opts.Service.Listed(claims.Handle); !ok {
 			p.Page = tokenInvalidPage
-			m.tmpl.ExecuteTemplate(w, "page", p)
+			m.opts.Template.ExecuteTemplate(w, "page", p)
 			return
 		}
 		if cookie, err := r.Cookie("next_url"); err == nil {
 			p.NextURL = cookie.Value
 		}
 		p.Page = continueOrSignoutPage
-		m.tmpl.ExecuteTemplate(w, "page", p)
+		m.opts.Template.ExecuteTemplate(w, "page", p)
 		return
 	}
 	w.WriteHeader(http.StatusMethodNotAllowed)
@@ -260,14 +237,14 @@ func (m *Multipass) loginHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			http.SetCookie(w, cookie)
 		}
-		http.Redirect(w, r, m.basepath, http.StatusSeeOther)
+		http.Redirect(w, r, m.opts.Basepath, http.StatusSeeOther)
 		return
 	}
 	if r.Method == "POST" {
 		r.ParseForm()
 		handle := r.PostForm.Get("handle")
 		if len(handle) > 0 {
-			if m.service.Listed(handle) {
+			if m.opts.Service.Listed(handle) {
 				token, err := m.AccessToken(handle)
 				if err != nil {
 					log.Print(err)
@@ -276,20 +253,20 @@ func (m *Multipass) loginHandler(w http.ResponseWriter, r *http.Request) {
 				if s := r.PostForm.Get("url"); len(s) > 0 {
 					values.Set("url", s)
 				}
-				loginURL, err := NewLoginURL(m.siteaddr, m.basepath, token, values)
+				loginURL, err := NewLoginURL(m.siteaddr, m.opts.Basepath, token, values)
 				if err != nil {
 					log.Print(err)
 				}
-				if err := m.service.Notify(handle, loginURL.String()); err != nil {
+				if err := m.opts.Service.Notify(handle, loginURL.String()); err != nil {
 					log.Print(err)
 				}
 			}
 			// Redirect even when the handle is not listed in order to prevent guessing
-			location := path.Join(m.basepath, "confirm")
+			location := path.Join(m.opts.Basepath, "confirm")
 			http.Redirect(w, r, location, http.StatusSeeOther)
 			return
 		}
-		http.Redirect(w, r, m.basepath, http.StatusSeeOther)
+		http.Redirect(w, r, m.opts.Basepath, http.StatusSeeOther)
 		return
 	}
 	w.WriteHeader(http.StatusMethodNotAllowed)
@@ -301,7 +278,7 @@ func (m *Multipass) confirmHandler(w http.ResponseWriter, r *http.Request) {
 		p := &page{
 			Page: tokenSentPage,
 		}
-		m.tmpl.ExecuteTemplate(w, "page", p)
+		m.opts.Template.ExecuteTemplate(w, "page", p)
 		return
 	}
 	w.WriteHeader(http.StatusMethodNotAllowed)
@@ -317,7 +294,7 @@ func (m *Multipass) signoutHandler(w http.ResponseWriter, r *http.Request) {
 			cookie.Path = "/"
 			http.SetCookie(w, cookie)
 		}
-		http.Redirect(w, r, m.basepath, http.StatusSeeOther)
+		http.Redirect(w, r, m.opts.Basepath, http.StatusSeeOther)
 		return
 	}
 	w.WriteHeader(http.StatusMethodNotAllowed)
@@ -342,7 +319,7 @@ func (m *Multipass) publicKeyHandler(w http.ResponseWriter, r *http.Request) {
 func (m *Multipass) AccessToken(handle string) (tokenStr string, err error) {
 	claims := &Claims{
 		Handle:  handle,
-		Expires: time.Now().Add(m.Expires).Unix(),
+		Expires: time.Now().Add(m.opts.Expires).Unix(),
 	}
 	key, err := PrivateKeyFromEnvironment()
 	if err != nil || key == nil {
@@ -357,12 +334,12 @@ func (m *Multipass) AccessToken(handle string) (tokenStr string, err error) {
 
 // NewLoginURL returns a login url which can be used as a time limited login.
 // Optional values will be encoded in the login URL.
-func NewLoginURL(siteaddr, basepath, token string, v url.Values) (*url.URL, error) {
+func NewLoginURL(siteaddr, Basepath, token string, v url.Values) (*url.URL, error) {
 	u, err := url.Parse(siteaddr)
 	if err != nil {
 		return u, err
 	}
-	u.Path = path.Join(basepath, "login")
+	u.Path = path.Join(Basepath, "login")
 	v.Set("token", token)
 	u.RawQuery = v.Encode()
 	return u, nil
@@ -390,7 +367,7 @@ func ResourceHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int,
 		}
 	}
 	// Verify if user identified by handle is authorized to access resource
-	if ok := m.service.Authorized(handle, r.Method, r.URL.String()); !ok {
+	if ok := m.opts.Service.Authorized(handle, r.Method, r.URL.String()); !ok {
 		if handle == "" && token != "" {
 			return http.StatusForbidden, ErrInvalidToken
 		}
@@ -421,14 +398,14 @@ func ResourceHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int,
 // copying the AuthHandler and make minor changes.
 func AuthHandler(next http.Handler, m *Multipass) http.Handler {
 	fn := func(w http.ResponseWriter, r *http.Request) {
-		if ok := strings.HasPrefix(r.URL.Path, m.BasePath()); ok {
+		if ok := strings.HasPrefix(r.URL.Path, m.Basepath()); ok {
 			m.ServeHTTP(w, r)
 			return
 		}
 		if _, err := ResourceHandler(w, r, m); err != nil {
 			v := url.Values{"url": []string{r.URL.String()}}
 			u := &url.URL{
-				Path:     m.BasePath(),
+				Path:     m.Basepath(),
 				RawQuery: v.Encode(),
 			}
 			location := u.String()

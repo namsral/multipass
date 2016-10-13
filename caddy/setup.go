@@ -38,14 +38,6 @@ func setup(c *caddy.Controller) error {
 	}
 	rule := rules[0]
 
-	m, err := multipass.New(cfg.Addr.String())
-	if err != nil {
-		return err
-	}
-	if p := rule.BasePath; len(p) > 0 {
-		m.SetBasePath(rule.BasePath)
-	}
-
 	// Create an email UserService
 	service, err := email.NewUserService(email.Options{
 		SMTPAddr:       rule.SMTPAddr,
@@ -72,11 +64,15 @@ func setup(c *caddy.Controller) error {
 	} else {
 		service.AddResource("/")
 	}
-	m.SetUserService(service)
 
-	if rule.Expires > 0 {
-		m.Expires = rule.Expires
+	opts := []multipass.Option{multipass.Service(service)}
+	if len(rule.Basepath) > 0 {
+		opts = append(opts, multipass.Basepath(rule.Basepath))
 	}
+	if rule.Expires > 0 {
+		opts = append(opts, multipass.Expires(rule.Expires))
+	}
+	m := multipass.New(cfg.Addr.String(), opts...)
 
 	mid := func(next httpserver.Handler) httpserver.Handler {
 		return &Auth{
@@ -111,7 +107,7 @@ func parse(c *caddy.Controller) ([]Rule, error) {
 					if len(args) != 1 {
 						return rules, c.Err("Expecting a single basepath")
 					}
-					rule.BasePath = args[0]
+					rule.Basepath = args[0]
 				case "handles":
 					args := c.RemainingArgs()
 					if len(args) <= 0 {

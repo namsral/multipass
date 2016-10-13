@@ -38,7 +38,7 @@ func TestParse(t *testing.T) {
 		}`, false, []Rule{
 			{
 				Resources: []string{"/fhloston", "paradise"},
-				BasePath:  "/multipass",
+				Basepath:  "/multipass",
 				Expires:   time.Hour * 24,
 				Handles:   []string{"leeloo@dallas", "korben@dallas"},
 				SMTPAddr:  "localhost:2525",
@@ -114,8 +114,8 @@ func TestParse(t *testing.T) {
 			if len(actualRule.Resources) != len(expectedRule.Resources) {
 				t.Errorf("test #%d: expected %d Resources, actual %d Resources", i, len(expectedRule.Resources), len(actualRule.Resources))
 			}
-			if actualRule.BasePath != expectedRule.BasePath {
-				t.Errorf("test #%d, rule #%d: expected '%s', actual '%s'", i, j, expectedRule.BasePath, actualRule.BasePath)
+			if actualRule.Basepath != expectedRule.Basepath {
+				t.Errorf("test #%d, rule #%d: expected '%s', actual '%s'", i, j, expectedRule.Basepath, actualRule.Basepath)
 			}
 			if actualRule.Expires != expectedRule.Expires {
 				t.Errorf("test #%d, rule #%d: expected '%s', actual '%s'", i, j, expectedRule.Expires, actualRule.Expires)

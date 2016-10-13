@@ -22,7 +22,7 @@ type Auth struct {
 func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 	m := a.Multipass
 
-	if httpserver.Path(r.URL.Path).Matches(m.BasePath()) {
+	if httpserver.Path(r.URL.Path).Matches(m.Basepath()) {
 		m.ServeHTTP(w, r)
 		return 200, nil
 	}
@@ -30,7 +30,7 @@ func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 	if _, err := multipass.ResourceHandler(w, r, m); err != nil {
 		v := url.Values{"url": []string{r.URL.String()}}
 		u := &url.URL{
-			Path:     m.BasePath(),
+			Path:     m.Basepath(),
 			RawQuery: v.Encode(),
 		}
 		location := u.String()
@@ -43,7 +43,7 @@ func (a *Auth) ServeHTTP(w http.ResponseWriter, r *http.Request) (int, error) {
 
 // Rule holds the directive options parsed from a Caddyfile.
 type Rule struct {
-	BasePath  string
+	Basepath  string
 	Expires   time.Duration
 	Resources []string
 	Handles   []string
