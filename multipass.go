@@ -28,6 +28,7 @@ import (
 var (
 	ErrInvalidToken = errors.New("invalid token")
 	ErrForbidden    = errors.New(http.StatusText(http.StatusForbidden))
+	ErrUnauthorized = errors.New(http.StatusText(http.StatusUnauthorized))
 )
 
 // DefaultUserService is the default UserService used by Multipass.
@@ -373,20 +374,31 @@ func NewLoginURL(siteaddr, basepath, token string, v url.Values) (*url.URL, erro
 func ResourceHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int, error) {
 	var key *rsa.PrivateKey
 	var handle string
-	header := make(http.Header)
-	if token := GetTokenRequest(r); len(token) > 0 {
+	var header = make(http.Header)
+
+	token := GetTokenRequest(r)
+	if len(token) > 0 {
 		k, err := PrivateKeyFromEnvironment()
 		if err != nil || k == nil {
 			return http.StatusInternalServerError, errors.New("parsing private key from env failed")
 		}
 		key = k
 		claims, err := validateToken(token, key.PublicKey)
-		if err != nil {
-			w.Header().Set("Www-Authenticate", "Bearer token_type=\"JWT\"")
-			return http.StatusUnauthorized, ErrInvalidToken
+		if err == nil {
+			handle = claims.Handle
+			header.Add("Multipass-Handle", handle)
 		}
-		handle = claims.Handle
-		header.Add("Multipass-Handle", handle)
+	}
+	// Verify if user identified by handle is authorized to access resource
+	if ok := m.service.Authorized(handle, r.Method, r.URL.String()); !ok {
+		if handle == "" && token != "" {
+			return http.StatusForbidden, ErrInvalidToken
+		}
+		if handle == "" {
+			w.Header().Set("Www-Authenticate", "Bearer token_type=\"JWT\"")
+			return http.StatusUnauthorized, ErrUnauthorized
+		}
+		return http.StatusForbidden, ErrForbidden
 	}
 	// Sign header
 	if len(header) > 0 {
@@ -398,11 +410,6 @@ func ResourceHandler(w http.ResponseWriter, r *http.Request, m *Multipass) (int,
 		}
 		SignHeader(header, key)
 		copyHeader(r.Header, header)
-	}
-
-	// Verify if user identified by handle is authorized to access resource
-	if ok := m.service.Authorized(handle, r.Method, r.URL.String()); !ok {
-		return http.StatusForbidden, ErrForbidden
 	}
 	// Pass on authorized handle to downstream handlers
 	return http.StatusOK, nil

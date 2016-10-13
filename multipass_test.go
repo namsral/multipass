@@ -107,15 +107,15 @@ func TestTokenHandler(t *testing.T) {
 			desc:   "request without token",
 			method: "GET",
 			path:   "/private",
-			status: http.StatusForbidden,
-			err:    ErrForbidden,
+			status: http.StatusUnauthorized,
+			err:    ErrUnauthorized,
 		},
 		{
 			desc:   "request with invalid token",
 			method: "GET",
 			path:   "/private",
 			header: http.Header{"Cookie": []string{fmt.Sprint(&http.Cookie{Name: "jwt_token", Value: "garbage"})}},
-			status: http.StatusUnauthorized,
+			status: http.StatusForbidden,
 			err:    ErrInvalidToken,
 		},
 		{
