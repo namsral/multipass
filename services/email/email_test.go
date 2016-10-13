@@ -5,7 +5,10 @@ package email
 
 import (
 	"bytes"
+	"io/ioutil"
+	"log"
 	"net/mail"
+	"reflect"
 	"testing"
 	"text/template"
 
@@ -194,7 +197,8 @@ func TestMatchPattern(t *testing.T) {
 	for i, test := range tests {
 		got, want := MatchHandle(test.pattern, test.address), test.shouldMatch
 		if got != want {
-			t.Errorf("test #%d; want pattern %s to match address %s, but failed", i, test.pattern, test.address)
+			t.Errorf("test #%d; want pattern %s to match address %s, but failed",
+				i, test.pattern, test.address)
 		}
 	}
 
@@ -221,7 +225,8 @@ func TestValidHandle(t *testing.T) {
 	for i, test := range tests {
 		got, want := ValidHandle(test.handle), test.shouldValidate
 		if got != want {
-			t.Errorf("test #%d; want ValidHandle(\"%s\") to return %t, got %t", i, test.handle, want, got)
+			t.Errorf("test #%d; want ValidHandle(\"%s\") to return %t, got %t",
+				i, test.handle, want, got)
 		}
 	}
 
@@ -238,12 +243,30 @@ func TestSendmail(t *testing.T) {
 		t.Errorf("cat: %v", err)
 	}
 
+	// Need to parse messages before comparison as the order of headers may
+	// differ
+
+	mGot, err := mail.ReadMessage(bytes.NewBuffer(output))
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	buf := new(bytes.Buffer)
 	if _, err := m.WriteTo(buf); err != nil {
 		t.Error(err)
 	}
+	mWant, err := mail.ReadMessage(buf)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	if want, got := buf.Bytes(), output; !bytes.Equal(want, got) {
+	if want, got := mWant.Header, mGot.Header; !reflect.DeepEqual(want, got) {
+		t.Errorf("cat: want %q, got %q", want, got)
+	}
+
+	bGot, err := ioutil.ReadAll(mGot.Body)
+	bWant, err := ioutil.ReadAll(mWant.Body)
+	if want, got := bWant, bGot; !bytes.Equal(want, got) {
 		t.Errorf("cat: want %q, got %q", want, got)
 	}
 }
