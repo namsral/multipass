@@ -1,3 +1,40 @@
+#### [0.4.0] - 2016-10-20
+### Added
+- Add support for custom mail template
+- Add functional options
+- Add CSRF protection to basepath requests
+- Add support for SMTP clients (MSA)
+- Add func sendmail and runMSA to support SMTP clients
+- Add func PrivateKeyFromEnvironment to replace pemDecodePrivateKey
+- Add missing license headers
+- Add header signature
+- Add go vet command to Travic CI
+- Add Travis CI configuration
+- Support Caddy's CaddyFile server type association
+- Add support for wildcard user handles
+- Add example to use multipass.AuthHandler and email.UserService
+- Extend UserService.Authorized method to accept Request.Method
+
+### Changed
+- Refactor TestSendmail cleanup ineffectual assignments
+- Rename instances of next URL to "next" for consistency
+- Move default UserService setup to parseOptions
+- Update key size with const DefaultKeySize
+- Delete files which got accidentally comitted in dd41fec3
+- Update test rename email.UserService.Register to AddHandle
+- Update docs rename email.UserService.Register to AddHandle
+- Update caddy package to reflect changes in email.UserService
+- Rename function multipass.NewMultipass to multipass.New
+- Rename fields in email.Option to improve readability
+- Remove error result type from loadTemplates() as it always returns nil
+
+### Fixed
+- Fix TestSendmail allow for unsorted headers
+- Fix inaccessable public resources with invalid token
+- Fix unset default for the resources parameter
+- Fix ResourceHandler returns StatusForibidden without embedded token
+
+
 #### [0.3.0] - 2016-09-21
 ### Added
 - Add doc.go to explain package basics
@@ -26,6 +63,7 @@
 - Remove NewMultupassRule as it adds unncessary complexity
 - Remove private key from Multipass instance, load from environment
 
+
 #### [0.2.0] - 2016-08-27
 ### Added
 - Add support for HTML mail message
@@ -39,6 +77,7 @@
 - Fix typos in README.md and templates.go
 - Fix blocking of Notify() calls by backgrounding message sending
 - Fix aberrant input appearance on Mobile Safari
+
 
 ## [0.1.0] - 2016-08-16
 ### Added
