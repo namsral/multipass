@@ -114,6 +114,7 @@ multipass {
 	smtp_pass   password
 	smtp_client command [args...]
 	mail_from   email
+	mail_tmpl   path
 }
 ```
 
@@ -126,6 +127,7 @@ multipass {
 - __smtp_pass__: Mailserver password used for authentication.
 - __smtp_client__: SMTP client command with arguments. Mutually exclusive with __smtp_addr__
 - __mail_from__: From address used in email messages sent to users. _Required_
+- __mail_tmpl__: Path to mail template to override deault subject, plain and html body.
 
 ### Examples:
 
