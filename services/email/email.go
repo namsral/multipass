@@ -23,6 +23,9 @@ import (
 )
 
 const msgTmpl = `
+{{ define "subject" -}}
+Multipass Login
+{{- end }}
 {{ define "text/plain" }}
 Hi,
 
@@ -79,6 +82,7 @@ type Options struct {
 	SMTPAddr, SMTPUser, SMTPPass string
 	SMTPClientName               string
 	SMTPClientArgs               []string
+	MailTemplate                 string
 }
 
 // NewUserService returns a new UserService instance with the given options.
@@ -89,7 +93,14 @@ func NewUserService(opt Options) (*UserService, error) {
 		return nil, err
 	}
 	s.from = from
+
 	s.template = template.Must(template.New("").Parse(msgTmpl))
+	if opt.MailTemplate != "" {
+		if _, err := s.template.ParseFiles(opt.MailTemplate); err != nil {
+			log.Println("ignoring invalid mail template at", opt.MailTemplate)
+		}
+	}
+
 	s.channel = make(chan *gomail.Message)
 
 	switch opt.SMTPClientName != "" {
@@ -254,14 +265,24 @@ func (s *UserService) Notify(handle, loginurl string) error {
 		return err
 	}
 
+	data := struct {
+		LoginURL string
+		Handle   string
+	}{
+		LoginURL: loginurl,
+		Handle:   handle,
+	}
 	m := gomail.NewMessage()
 	m.SetHeader("From", s.from.String())
 	m.SetHeader("Return-Path", fmt.Sprintf("<%s>", s.from.Address))
 	m.SetHeader("To", toAddr.String())
 	m.SetHeader("Date", time.Now().Format(time.RFC1123Z))
-	m.SetHeader("Subject", "Multipass Login")
+	buf := new(bytes.Buffer)
+	if err := s.template.ExecuteTemplate(buf, "subject", data); err != nil {
+		return err
+	}
+	m.SetHeader("Subject", buf.String())
 
-	data := struct{ LoginURL string }{LoginURL: loginurl}
 	if m.AddAlternativeWriter("text/plain", func(w io.Writer) error {
 		return s.template.ExecuteTemplate(w, "text/plain", data)
 	}); err != nil {

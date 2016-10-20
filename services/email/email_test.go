@@ -5,6 +5,7 @@ package email
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/mail"
@@ -277,5 +278,33 @@ func TestSendmail(t *testing.T) {
 	}
 	if want, got := bWant, bGot; !bytes.Equal(want, got) {
 		t.Errorf("cat: want %q, got %q", want, got)
+	}
+}
+
+func TestMailTemplate(t *testing.T) {
+	testCases := []struct {
+		input string
+		want  string
+	}{
+		{input: ".", want: "Multipass Login"},
+		{input: "./testdata/mail.tmpl", want: "Test Subject"},
+	}
+	buf := new(bytes.Buffer)
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("%q", tc.input), func(t *testing.T) {
+			buf.Reset()
+			opt := Options{
+				FromAddr:     "no-reply@dallas",
+				MailTemplate: tc.input,
+			}
+			s, err := NewUserService(opt)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s.template.ExecuteTemplate(buf, "subject", nil)
+			if got := buf.String(); got != tc.want {
+				t.Errorf("got %s; want %s", got, tc.want)
+			}
+		})
 	}
 }

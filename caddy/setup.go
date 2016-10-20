@@ -8,6 +8,7 @@ package multipass
 
 import (
 	"fmt"
+	"path"
 	"time"
 
 	"github.com/mholt/caddy"
@@ -38,6 +39,16 @@ func setup(c *caddy.Controller) error {
 	}
 	rule := rules[0]
 
+	// Read mail template
+	var mailtmpl string
+	if s := path.Clean(rule.MailTmpl); len(s) > 0 {
+		if path.IsAbs(s) {
+			mailtmpl = s
+		} else {
+			mailtmpl = path.Join(cfg.Root, s)
+		}
+	}
+
 	// Create an email UserService
 	service, err := email.NewUserService(email.Options{
 		SMTPAddr:       rule.SMTPAddr,
@@ -46,6 +57,7 @@ func setup(c *caddy.Controller) error {
 		FromAddr:       rule.MailFrom,
 		SMTPClientName: rule.SMTPClientName,
 		SMTPClientArgs: rule.SMTPClientArgs,
+		MailTemplate:   mailtmpl,
 	})
 	if err != nil {
 		return err
