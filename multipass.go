@@ -121,6 +121,7 @@ func (m *Multipass) routeHandler(w http.ResponseWriter, r *http.Request) {
 			p := &page{
 				Page: notfoundPage,
 			}
+			w.Header().Add("Content-Type", "text/html; charset=utf-8")
 			m.opts.Template.ExecuteTemplate(w, "page", p)
 		}
 	}
@@ -148,6 +149,7 @@ func csrfProtect(h http.Handler, m *Multipass) http.Handler {
 			Page:         errorPage,
 			ErrorMessage: "Sorry, your CSRF token is invalid",
 		}
+		w.Header().Add("Content-Type", "text/html; charset=utf-8")
 		m.opts.Template.ExecuteTemplate(w, "page", p)
 	})
 
@@ -182,6 +184,7 @@ func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
 			if s := r.URL.Query().Get("next"); !strings.HasPrefix(s, m.opts.Basepath) {
 				p.NextURL = s
 			}
+			w.Header().Add("Content-Type", "text/html; charset=utf-8")
 			m.opts.Template.ExecuteTemplate(w, "page", p)
 			return
 		}
@@ -196,12 +199,14 @@ func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
 			if s := r.URL.Query().Get("next"); !strings.HasPrefix(s, m.opts.Basepath) {
 				p.NextURL = s
 			}
+			w.Header().Add("Content-Type", "text/html; charset=utf-8")
 			m.opts.Template.ExecuteTemplate(w, "page", p)
 			return
 		}
 		// Authorize handle claim
 		if ok := m.opts.Service.Listed(claims.Handle); !ok {
 			p.Page = tokenInvalidPage
+			w.Header().Add("Content-Type", "text/html; charset=utf-8")
 			m.opts.Template.ExecuteTemplate(w, "page", p)
 			return
 		}
@@ -209,6 +214,7 @@ func (m *Multipass) rootHandler(w http.ResponseWriter, r *http.Request) {
 			p.NextURL = cookie.Value
 		}
 		p.Page = continueOrSignoutPage
+		w.Header().Add("Content-Type", "text/html; charset=utf-8")
 		m.opts.Template.ExecuteTemplate(w, "page", p)
 		return
 	}
@@ -270,10 +276,10 @@ func (m *Multipass) loginHandler(w http.ResponseWriter, r *http.Request) {
 
 func (m *Multipass) confirmHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
-		w.Header().Add("Content-Type", "text/html; charset=utf-8")
 		p := &page{
 			Page: tokenSentPage,
 		}
+		w.Header().Add("Content-Type", "text/html; charset=utf-8")
 		m.opts.Template.ExecuteTemplate(w, "page", p)
 		return
 	}
